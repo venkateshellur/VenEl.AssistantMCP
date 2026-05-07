@@ -1,0 +1,8 @@
+﻿{
+  "mcpServers": {
+    "venel": {
+      "command": "C:\\Venky\\GIT\\VenEl.MCPAssistant\\VenEl.MCPAssistant\\publish\\VenEl.MCPAssistant.Server.exe",
+      "args": []
+    }
+  }
+}
