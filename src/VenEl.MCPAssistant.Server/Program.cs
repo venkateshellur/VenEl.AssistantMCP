@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using VenEl.MCPAssistant.Core.Registration;
 using VenEl.MCPAssistant.Atlassian.Extensions;
+using VenEl.MCPAssistant.Azure.Extensions;
 using VenEl.MCPAssistant.MSSql.Extensions;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +41,7 @@ builder.Logging
 
 builder.Services.AddMSSqlFeature(builder.Configuration);
 builder.Services.AddAtlassianFeature(builder.Configuration);
+builder.Services.AddAzureFeature(builder.Configuration);
 
 // Add future features below — one line each, fully independent:
 // builder.Services.AddGitHubFeature(builder.Configuration);
