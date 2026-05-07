@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/VenEl.MCPAssistant.Core/VenEl.MCPAssistant.Core.csproj" />
     <Project Path="src/VenEl.MCPAssistant.MSSql/VenEl.MCPAssistant.MSSql.csproj" />
+    <Project Path="src/VenEl.MCPAssistant.Atlassian/VenEl.MCPAssistant.Atlassian.csproj" />
     <Project Path="src/VenEl.MCPAssistant.Server/VenEl.MCPAssistant.Server.csproj" />
   </Folder>
 </Solution>
