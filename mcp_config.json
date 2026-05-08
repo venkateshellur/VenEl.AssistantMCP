@@ -6,3 +6,19 @@
     }
   }
 }
+{
+  "mcpServers": {
+    "venel": {
+      "command": "Z:\\Git\\VenEl.MCPAssistant\\VenEl.MCPAssistant\\publish\\VenEl.MCPAssistant.Server.exe",
+      "args": []
+    }
+  }
+}
+{
+  "mcpServers": {
+    "venel": {
+      "command": "C:\\Venky\\MCPs\\VenEl.MCPAssistant\\VenEl.MCPAssistant.Server.exe",
+      "args": []
+    }
+  }
+}

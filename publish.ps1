@@ -12,10 +12,10 @@ $ErrorActionPreference = "Stop"
 
 $SolutionRoot   = $PSScriptRoot
 $ServerCsproj   = Join-Path $SolutionRoot "src\VenEl.MCPAssistant.Server\VenEl.MCPAssistant.Server.csproj"
-$PublishDir     = Join-Path $SolutionRoot "publish"
+$PublishDir     = "C:\Venky\MCPs\VenEl.MCPAssistant"
 $ServerExe      = Join-Path $PublishDir "VenEl.MCPAssistant.Server.exe"
 
-$AntigravityConfig = "$env:USERPROFILE\.gemini\antigravity\mcp_config.json"
+$AntigravityConfig = "$env:USERPROFILE\.gemini\antigravity\mcp-config.json"
 $ProjectConfig     = Join-Path $SolutionRoot "mcp_config.json"
 
 # ── Step 1: Stop the running server ──────────────────────────────────────────
@@ -24,12 +24,29 @@ Stop-Process -Name "VenEl.MCPAssistant.Server" -Force -ErrorAction SilentlyConti
 Start-Sleep -Milliseconds 500
 
 # ── Step 2: Publish ───────────────────────────────────────────────────────────
+$AppsettingsDest = Join-Path $PublishDir "appsettings.json"
+$AppsettingsBackup = Join-Path $PublishDir "appsettings.json.bak"
+$appsettingsExisted = $false
+
+if (Test-Path $AppsettingsDest) {
+    Write-Host "Backing up existing appsettings.json..." -ForegroundColor Yellow
+    Copy-Item -Path $AppsettingsDest -Destination $AppsettingsBackup -Force
+    $appsettingsExisted = $true
+}
+
 Write-Host "Publishing to: $PublishDir" -ForegroundColor Cyan
 dotnet publish $ServerCsproj -c Release -o $PublishDir --no-self-contained
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Publish failed (exit code $LASTEXITCODE)."
     exit $LASTEXITCODE
 }
+
+if ($appsettingsExisted) {
+    Write-Host "Restoring existing appsettings.json..." -ForegroundColor Yellow
+    Copy-Item -Path $AppsettingsBackup -Destination $AppsettingsDest -Force
+    Remove-Item -Path $AppsettingsBackup -Force
+}
+
 Write-Host "Publish succeeded." -ForegroundColor Green
 
 # ── Step 3: Build MCP config JSON ────────────────────────────────────────────

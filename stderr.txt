@@ -1,0 +1,2 @@
+warn: Program[0]
+      VenEl MCP Assistant server started successfully.

@@ -6,6 +6,7 @@ using VenEl.MCPAssistant.Core.Registration;
 using VenEl.MCPAssistant.Atlassian.Extensions;
 using VenEl.MCPAssistant.Azure.Extensions;
 using VenEl.MCPAssistant.MSSql.Extensions;
+using VenEl.MCPAssistant.Logging.Extensions;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VenEl MCP Assistant – STDIO MCP Server
@@ -42,6 +43,7 @@ builder.Logging
 builder.Services.AddMSSqlFeature(builder.Configuration);
 builder.Services.AddAtlassianFeature(builder.Configuration);
 builder.Services.AddAzureFeature(builder.Configuration);
+builder.Services.AddLoggingFeature(builder.Configuration);
 
 // Add future features below — one line each, fully independent:
 // builder.Services.AddGitHubFeature(builder.Configuration);
@@ -69,4 +71,6 @@ builder.Services
 
 // ── Run ───────────────────────────────────────────────────────────────────────
 var host = builder.Build();
+var logger = host.Services.GetRequiredService<ILogger<Program>>();
+logger.LogWarning("VenEl MCP Assistant server started successfully.");
 await host.RunAsync();
