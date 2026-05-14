@@ -46,10 +46,17 @@ public sealed class McpFeatureRegistry
     /// Applies every registered tool-registration callback to <paramref name="mcpBuilder"/>.
     /// Call this once in <c>Program.cs</c>, after all features have been added.
     /// </summary>
-    public IMcpServerBuilder ApplyAll(IMcpServerBuilder mcpBuilder)
+    /// <param name="mcpBuilder">The MCP server builder.</param>
+    /// <param name="allowedFeatures">Optional set of feature names to apply. If null or empty, all features are applied.</param>
+    public IMcpServerBuilder ApplyAll(IMcpServerBuilder mcpBuilder, IReadOnlySet<string>? allowedFeatures = null)
     {
         foreach (var reg in _registrations)
-            reg.ToolRegistration(mcpBuilder);
+        {
+            if (allowedFeatures == null || allowedFeatures.Count == 0 || allowedFeatures.Contains(reg.FeatureName, StringComparer.OrdinalIgnoreCase))
+            {
+                reg.ToolRegistration(mcpBuilder);
+            }
+        }
 
         return mcpBuilder;
     }

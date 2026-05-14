@@ -24,6 +24,11 @@ public class FileLoggerProvider : ILoggerProvider
     {
         _options = options.Value;
         
+        if (!Path.IsPathRooted(_options.LogDirectory))
+        {
+            _options.LogDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _options.LogDirectory);
+        }
+
         if (!Directory.Exists(_options.LogDirectory))
         {
             Directory.CreateDirectory(_options.LogDirectory);

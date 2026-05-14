@@ -50,6 +50,35 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 Or publish a self-contained binary and point `command` at the executable instead.
 
+## Grouping Tools by Category
+
+If you want to create multiple logical MCP servers (e.g. one for Azure, one for MSSql), you can filter which tools are loaded by passing the `--feature` (or `-f`) argument to the server command.
+
+For example, to configure two separate MCP servers in Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "venel-azure": {
+      "command": "dotnet",
+      "args": [
+        "run", "--project", "src/VenEl.MCPAssistant.Server", "--configuration", "Release",
+        "--", "--feature", "Azure"
+      ]
+    },
+    "venel-sql": {
+      "command": "dotnet",
+      "args": [
+        "run", "--project", "src/VenEl.MCPAssistant.Server", "--configuration", "Release",
+        "--", "--feature", "MSSql"
+      ]
+    }
+  }
+}
+```
+
+If you omit the `--feature` flag, all tools from all registered modules will be loaded.
+
 ## Adding Functionality
 
 All new tools, resources, and prompts go into `VenEl.MCPAssistant.Core`. See [`src/VenEl.MCPAssistant.Core/README.md`](src/VenEl.MCPAssistant.Core/README.md) for details.

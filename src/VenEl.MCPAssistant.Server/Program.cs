@@ -32,7 +32,6 @@ builder.Configuration
 // All log output goes to stderr so the STDIO JSON-RPC stream stays clean.
 builder.Logging
     .ClearProviders()
-    .AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace)
     .SetMinimumLevel(LogLevel.Warning);
 
 // ══ Feature Modules ══════════════════════════════════════════════════════════
@@ -65,9 +64,20 @@ var mcpBuilder = builder.Services
     .WithStdioServerTransport();
 
 // Dynamically apply every registered feature's MCP tools in one shot.
+// Parse optional --feature or -f arguments (e.g. --feature azure --feature mssql)
+var allowedFeatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+for (int i = 0; i < args.Length; i++)
+{
+    if ((args[i] == "--feature" || args[i] == "-f") && i + 1 < args.Length)
+    {
+        allowedFeatures.Add(args[i + 1]);
+        i++;
+    }
+}
+
 builder.Services
     .GetOrAddFeatureRegistry()
-    .ApplyAll(mcpBuilder);
+    .ApplyAll(mcpBuilder, allowedFeatures);
 
 // ── Run ───────────────────────────────────────────────────────────────────────
 var host = builder.Build();
