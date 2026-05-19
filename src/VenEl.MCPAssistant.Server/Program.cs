@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using VenEl.MCPAssistant.Core.Registration;
 using VenEl.MCPAssistant.Atlassian.Extensions;
 using VenEl.MCPAssistant.Azure.Extensions;
+using VenEl.MCPAssistant.GitHub.Extensions;
 using VenEl.MCPAssistant.MSSql.Extensions;
 using VenEl.MCPAssistant.Logging.Extensions;
 
@@ -42,10 +43,10 @@ builder.Logging
 builder.Services.AddMSSqlFeature(builder.Configuration);
 builder.Services.AddAtlassianFeature(builder.Configuration);
 builder.Services.AddAzureFeature(builder.Configuration);
+builder.Services.AddGitHubFeature();
 builder.Services.AddLoggingFeature(builder.Configuration);
 
 // Add future features below — one line each, fully independent:
-// builder.Services.AddGitHubFeature(builder.Configuration);
 // builder.Services.AddAzureFeature(builder.Configuration);
 // builder.Services.AddAwsFeature(builder.Configuration);
 

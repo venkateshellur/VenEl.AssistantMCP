@@ -11,16 +11,33 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $SolutionRoot   = $PSScriptRoot
-$ServerCsproj   = Join-Path $SolutionRoot "src\VenEl.MCPAssistant.Server\VenEl.MCPAssistant.Server.csproj"
-$PublishDir     = "C:\Venky\MCPs\VenEl.MCPAssistant"
-$ServerExe      = Join-Path $PublishDir "VenEl.MCPAssistant.Server.exe"
+$ServerCsproj   = Join-Path $SolutionRoot "src" "VenEl.MCPAssistant.Server" "VenEl.MCPAssistant.Server.csproj"
 
-$AntigravityConfig = "$env:USERPROFILE\.gemini\antigravity\mcp-config.json"
+if ($IsWindows) {
+    $PublishDir        = "C:\Venky\MCPs\VenEl.MCPAssistant"
+    $ServerExe         = Join-Path $PublishDir "VenEl.MCPAssistant.Server.exe"
+    $AntigravityConfig = Join-Path $env:USERPROFILE ".gemini" "antigravity" "mcp-config.json"
+    $McpCommand        = $ServerExe.Replace('\', '\\')
+    $McpArgs           = "[]"
+} else {
+    $PublishDir        = Join-Path $SolutionRoot "publish"
+    $ServerExe         = Join-Path $PublishDir "VenEl.MCPAssistant.Server"
+    $AntigravityConfig = Join-Path $HOME ".gemini" "antigravity" "mcp-config.json"
+    $McpCommand        = "dotnet"
+    $DllPath           = Join-Path $PublishDir "VenEl.MCPAssistant.Server.dll"
+    $McpArgs           = '["' + $DllPath.Replace('\', '\\') + '"]'
+}
+
 $ProjectConfig     = Join-Path $SolutionRoot "mcp_config.json"
 
 # ── Step 1: Stop the running server ──────────────────────────────────────────
 Write-Host "Stopping any running MCP server instances..." -ForegroundColor Cyan
-Stop-Process -Name "VenEl.MCPAssistant.Server" -Force -ErrorAction SilentlyContinue
+if ($IsWindows) {
+    Stop-Process -Name "VenEl.MCPAssistant.Server" -Force -ErrorAction SilentlyContinue
+} else {
+    # Simple kill for Mac/Linux if running via dotnet
+    Get-Process | Where-Object { $_.ProcessName -eq "dotnet" -and $_.CommandLine -match "VenEl.MCPAssistant.Server.dll" } | Stop-Process -Force -ErrorAction SilentlyContinue
+}
 Start-Sleep -Milliseconds 500
 
 # ── Step 2: Publish ───────────────────────────────────────────────────────────
@@ -50,12 +67,11 @@ if ($appsettingsExisted) {
 Write-Host "Publish succeeded." -ForegroundColor Green
 
 # ── Step 3: Build MCP config JSON ────────────────────────────────────────────
-$ExeEscaped = $ServerExe.Replace('\', '\\')
 $ConfigJson = '{' + [System.Environment]::NewLine +
     '  "mcpServers": {' + [System.Environment]::NewLine +
     '    "venel": {' + [System.Environment]::NewLine +
-    '      "command": "' + $ExeEscaped + '",' + [System.Environment]::NewLine +
-    '      "args": []' + [System.Environment]::NewLine +
+    '      "command": "' + $McpCommand + '",' + [System.Environment]::NewLine +
+    '      "args": ' + $McpArgs + [System.Environment]::NewLine +
     '    }' + [System.Environment]::NewLine +
     '  }' + [System.Environment]::NewLine +
     '}'

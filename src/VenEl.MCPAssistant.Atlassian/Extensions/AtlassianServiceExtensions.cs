@@ -45,14 +45,11 @@ public static class AtlassianServiceExtensions
         // ── Self-register MCP tools into the shared registry ──────────────────
         services.GetOrAddFeatureRegistry().Register(
             featureName: "Atlassian",
-            description: "Atlassian Cloud tools: Jira issues/projects, " +
-                         "Confluence pages/spaces, Bitbucket repositories/pull requests, " +
-                         "and session credential setup.",
-            toolRegistration: mcpBuilder => mcpBuilder
-                .WithTools<AtlassianSetupTools>()
-                .WithTools<AtlassianJiraTools>()
-                .WithTools<AtlassianConfluenceTools>()
-                .WithTools<AtlassianBitbucketTools>());
+            description: "Atlassian Cloud tools: Jira issues/projects, Confluence pages/spaces, Bitbucket repositories/pull requests, and session credential setup.",
+            toolRegistration: mcpBuilder => mcpBuilder.WithTools<AtlassianDispatcherTool>());
+
+        // ── Action Handlers ───────────────────────────────────────────────────
+        services.AddActionHandlersFromAssembly<AtlassianCommandArgs>(typeof(AtlassianServiceExtensions).Assembly);
 
         return services;
     }

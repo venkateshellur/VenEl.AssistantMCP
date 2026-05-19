@@ -18,6 +18,7 @@
     <ProjectReference Include="..\VenEl.MCPAssistant.MSSql\VenEl.MCPAssistant.MSSql.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Atlassian\VenEl.MCPAssistant.Atlassian.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Azure\VenEl.MCPAssistant.Azure.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.GitHub\VenEl.MCPAssistant.GitHub.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Logging\VenEl.MCPAssistant.Logging.csproj" />
   </ItemGroup>
 

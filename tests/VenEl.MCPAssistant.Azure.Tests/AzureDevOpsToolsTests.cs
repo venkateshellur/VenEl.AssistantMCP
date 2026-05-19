@@ -21,11 +21,12 @@ public class AzureDevOpsToolsTests
             .Setup(c => c.GetAsync(AzureProduct.DevOps, "_apis/projects?$top=50", "7.1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedResponse);
 
-        var logger = NullLogger<AzureDevOpsTools>.Instance;
-        var tools = new AzureDevOpsTools(mockHttpClient.Object, logger);
+        var logger = NullLogger<AzureListProjectsActionHandler>.Instance;
+        var handler = new AzureListProjectsActionHandler(mockHttpClient.Object, logger);
+        var args = new AzureCommandArgs { Action = "azure_list_projects", Top = 50 };
 
         // Act
-        var result = await tools.AzureListProjectsAsync(50);
+        var result = await handler.HandleAsync(args, CancellationToken.None);
 
         // Assert
         Assert.Equal(expectedResponse, result);
