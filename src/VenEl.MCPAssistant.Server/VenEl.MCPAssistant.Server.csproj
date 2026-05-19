@@ -20,6 +20,7 @@
     <ProjectReference Include="..\VenEl.MCPAssistant.Azure\VenEl.MCPAssistant.Azure.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.GitHub\VenEl.MCPAssistant.GitHub.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Logging\VenEl.MCPAssistant.Logging.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.Docker\VenEl.MCPAssistant.Docker.csproj" />
   </ItemGroup>
 
   <ItemGroup>
