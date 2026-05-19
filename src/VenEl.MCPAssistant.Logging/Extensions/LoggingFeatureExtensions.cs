@@ -19,11 +19,14 @@ public static class LoggingFeatureExtensions
         // Register custom logger provider
         services.AddSingleton<ILoggerProvider, FileLoggerProvider>();
 
+        // Register action handlers for this feature
+        services.AddActionHandlersFromAssembly<LoggingCommandArgs>(typeof(LoggingFeatureExtensions).Assembly);
+
         // Register the tools for the MCP server
         services.GetOrAddFeatureRegistry().Register(
             featureName: "Logging",
             description: "Server diagnostic tools: read recent server logs.",
-            toolRegistration: mcpBuilder => mcpBuilder.WithTools<GetServerLogsTool>()
+            toolRegistration: mcpBuilder => mcpBuilder.WithTools<LoggingDispatcherTool>()
         );
 
         return services;

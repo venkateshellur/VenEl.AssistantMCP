@@ -39,13 +39,16 @@ public static class MSSqlServiceExtensions
 
         services.AddSingleton<ISqlConnectionFactory, SqlConnectionFactory>();
 
+        // ── Action Handlers ───────────────────────────────────────────────────
+        services.AddActionHandlersFromAssembly<MSSqlCommandArgs>(typeof(MSSqlServiceExtensions).Assembly);
+
         // ── Self-register MCP tools into the shared registry ─────────────────
         // Program.cs never needs to reference MSSqlTools directly.
         services.GetOrAddFeatureRegistry().Register(
             featureName:      "MSSql",
             description:      "Microsoft SQL Server tools: query, schema inspection, " +
                               "stored procedures, and (optionally) data modification.",
-            toolRegistration: mcpBuilder => mcpBuilder.WithTools<MSSqlTools>());
+            toolRegistration: mcpBuilder => mcpBuilder.WithTools<MSSqlDispatcherTool>());
 
         return services;
     }

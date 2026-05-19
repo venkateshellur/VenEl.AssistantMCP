@@ -33,4 +33,23 @@ public static class McpFeatureRegistryExtensions
         services.AddSingleton(registry);
         return registry;
     }
+
+    /// <summary>
+    /// Scans the given assembly for classes implementing IActionHandler{TArgs} and registers them in DI.
+    /// </summary>
+    public static IServiceCollection AddActionHandlersFromAssembly<TArgs>(
+        this IServiceCollection services, 
+        System.Reflection.Assembly assembly) where TArgs : class
+    {
+        var handlerType = typeof(VenEl.MCPAssistant.Core.Dispatcher.IActionHandler<TArgs>);
+        var types = assembly.GetTypes()
+            .Where(t => !t.IsAbstract && !t.IsInterface && handlerType.IsAssignableFrom(t));
+
+        foreach (var type in types)
+        {
+            services.AddTransient(handlerType, type);
+        }
+
+        return services;
+    }
 }

@@ -1,42 +1,42 @@
-using System.ComponentModel;
-using ModelContextProtocol.Server;
+using System.Threading;
+using System.Threading.Tasks;
 using VenEl.MCPAssistant.Azure.Services;
+using VenEl.MCPAssistant.Core.Dispatcher;
 
 namespace VenEl.MCPAssistant.Azure.Tools;
 
-/// <summary>
-/// MCP tool for configuring Azure credentials at runtime via the conversation window.
-/// Use this when credentials are not present in appsettings.json.
-/// </summary>
-[McpServerToolType]
-public sealed class AzureSetupTools(AzureSessionCredentials session)
+public sealed class AzureConfigureActionHandler(AzureSessionCredentials session) : IActionHandler<AzureCommandArgs>
 {
-    [McpServerTool(Name = "azure_configure")]
-    [Description(
-        "Configures Azure DevOps credentials for this session when they are not set in appsettings.json. " +
-        "Call this tool with credentials provided by the user in the conversation. " +
-        "Credentials are held in memory for the lifetime of the server process.")]
-    public string AzureConfigure(
-        [Description("Your Azure DevOps organization URL, e.g., 'https://dev.azure.com/your-org'.")] string organizationUrl,
-        [Description("Your Azure Personal Access Token (PAT).")] string patToken)
-    {
-        session.OrganizationUrl = organizationUrl.Trim().TrimEnd('/');
-        session.PatToken = patToken.Trim();
+    public string ActionName => "azure_configure";
 
-        return $"✅ Azure session credentials configured for organization '{session.OrganizationUrl}'. " +
-               "You can now use azure_* tools.";
+    public string? Validate(AzureCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.OrganizationUrl)) return "Missing required parameter 'OrganizationUrl'.";
+        if (string.IsNullOrWhiteSpace(args.PatToken)) return "Missing required parameter 'PatToken'.";
+        return null;
     }
 
-    [McpServerTool(Name = "azure_show_config")]
-    [Description(
-        "Shows the current Azure configuration status — which credentials are set " +
-        "(from appsettings.json or session) without revealing sensitive values.")]
-    public string AzureShowConfig()
+    public Task<string> HandleAsync(AzureCommandArgs args, CancellationToken ct)
+    {
+        session.OrganizationUrl = args.OrganizationUrl!.Trim().TrimEnd('/');
+        session.PatToken = args.PatToken!.Trim();
+
+        return Task.FromResult($"✅ Azure session credentials configured for organization '{session.OrganizationUrl}'. You can now use azure commands.");
+    }
+}
+
+public sealed class AzureShowConfigActionHandler(AzureSessionCredentials session) : IActionHandler<AzureCommandArgs>
+{
+    public string ActionName => "azure_show_config";
+
+    public string? Validate(AzureCommandArgs args) => null;
+
+    public Task<string> HandleAsync(AzureCommandArgs args, CancellationToken ct)
     {
         var orgSource = !string.IsNullOrWhiteSpace(session.OrganizationUrl) ? $"'{session.OrganizationUrl}' (session)" : "not set in session";
         var patSource = !string.IsNullOrWhiteSpace(session.PatToken) ? "set (session)" : "not set in session";
 
-        return $"""
+        return Task.FromResult($"""
                 Azure Configuration Status
                 ══════════════════════════
                 Organization URL: {orgSource}
@@ -44,6 +44,6 @@ public sealed class AzureSetupTools(AzureSessionCredentials session)
 
                 Note: appsettings.json values are used as fallback when session values are not set.
                 To set session credentials, call 'azure_configure'.
-                """;
+                """);
     }
 }

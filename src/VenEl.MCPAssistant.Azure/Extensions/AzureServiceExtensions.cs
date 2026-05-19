@@ -30,14 +30,15 @@ public static class AzureServiceExtensions
         // ── HTTP client ───────────────────────────────────────────────────────
         services.AddHttpClient<IAzureHttpClient, AzureHttpClient>();
 
+        // ── Action Handlers ───────────────────────────────────────────────────
+        services.AddActionHandlersFromAssembly<AzureCommandArgs>(typeof(AzureServiceExtensions).Assembly);
+
         // ── Self-register MCP tools into the shared registry ──────────────────
         services.GetOrAddFeatureRegistry().Register(
             featureName: "Azure",
             description: "Azure tools: Azure DevOps projects, repositories, pull requests, " +
                          "and session credential setup.",
-            toolRegistration: mcpBuilder => mcpBuilder
-                .WithTools<AzureSetupTools>()
-                .WithTools<AzureDevOpsTools>());
+            toolRegistration: mcpBuilder => mcpBuilder.WithTools<AzureDispatcherTool>());
 
         return services;
     }

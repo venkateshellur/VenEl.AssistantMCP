@@ -8,26 +8,27 @@ using Microsoft.Extensions.Options;
 using ModelContextProtocol.Server;
 using VenEl.MCPAssistant.Logging.Configuration;
 
+using VenEl.MCPAssistant.Core.Dispatcher;
+
 namespace VenEl.MCPAssistant.Logging.Tools;
 
-/// <summary>MCP tool for reading server logs.</summary>
-[McpServerToolType]
-public class GetServerLogsTool
+/// <summary>Handler for reading server logs.</summary>
+public class GetServerLogsActionHandler : IActionHandler<LoggingCommandArgs>
 {
     private readonly FileLoggerOptions _options;
 
-    public GetServerLogsTool(IOptions<FileLoggerOptions> options)
+    public GetServerLogsActionHandler(IOptions<FileLoggerOptions> options)
     {
         _options = options.Value;
     }
 
-    [McpServerTool(Name = "get_server_logs")]
-    [Description("Retrieves the most recent log lines from the server's active log file. Useful for self-diagnosing errors or checking execution flow.")]
-    public async Task<string> GetServerLogsAsync(
-        [Description("Number of lines to read from the end of the file. Default is 50, Max is 500.")] int lines = 50,
-        CancellationToken cancellationToken = default)
+    public string ActionName => "get_server_logs";
+
+    public string? Validate(LoggingCommandArgs args) => null; // all parameters are optional
+
+    public async Task<string> HandleAsync(LoggingCommandArgs args, CancellationToken ct)
     {
-        lines = Math.Clamp(lines, 1, 500);
+        int lines = Math.Clamp(args.Lines ?? 50, 1, 500);
 
         if (!Directory.Exists(_options.LogDirectory))
         {
@@ -49,7 +50,7 @@ public class GetServerLogsTool
             using var stream = new FileStream(latestFile.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var reader = new StreamReader(stream);
             
-            var allLines = (await reader.ReadToEndAsync(cancellationToken)).Split(Environment.NewLine);
+            var allLines = (await reader.ReadToEndAsync(ct)).Split(Environment.NewLine);
             var resultLines = allLines.Skip(Math.Max(0, allLines.Length - lines)).ToArray();
             
             return string.Join(Environment.NewLine, resultLines);

@@ -1,63 +1,60 @@
-using System.ComponentModel;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Server;
 using VenEl.MCPAssistant.Azure.Services;
+using VenEl.MCPAssistant.Core.Dispatcher;
 
 namespace VenEl.MCPAssistant.Azure.Tools;
 
-/// <summary>MCP tools for Azure DevOps REST API.</summary>
-[McpServerToolType]
-public sealed class AzureDevOpsTools(
-    IAzureHttpClient client,
-    ILogger<AzureDevOpsTools> logger)
+public sealed class AzureListProjectsActionHandler(IAzureHttpClient client, ILogger<AzureListProjectsActionHandler> logger) : IActionHandler<AzureCommandArgs>
 {
-    // ═════════════════════════════════════════════════════════════════════════
-    // Projects
-    // ═════════════════════════════════════════════════════════════════════════
+    public string ActionName => "azure_list_projects";
 
-    [McpServerTool(Name = "azure_list_projects")]
-    [Description("Lists all projects in the configured Azure DevOps organization.")]
-    public async Task<string> AzureListProjectsAsync(
-        [Description("Maximum projects to return (default 50).")] int top = 50,
-        CancellationToken cancellationToken = default)
+    public string? Validate(AzureCommandArgs args) => null;
+
+    public async Task<string> HandleAsync(AzureCommandArgs args, CancellationToken ct)
     {
-        top = Math.Clamp(top, 1, 100);
+        int top = Math.Clamp(args.Top ?? 50, 1, 100);
         logger.LogDebug("Listing Azure DevOps projects (top={Top})", top);
-        return await client.GetAsync(AzureProduct.DevOps,
-            $"_apis/projects?$top={top}", "7.1", cancellationToken);
+        return await client.GetAsync(AzureProduct.DevOps, $"_apis/projects?$top={top}", "7.1", ct);
+    }
+}
+
+public sealed class AzureListReposActionHandler(IAzureHttpClient client, ILogger<AzureListReposActionHandler> logger) : IActionHandler<AzureCommandArgs>
+{
+    public string ActionName => "azure_list_repos";
+
+    public string? Validate(AzureCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.Project)) return "Missing required parameter 'Project'.";
+        return null;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Repositories
-    // ═════════════════════════════════════════════════════════════════════════
-
-    [McpServerTool(Name = "azure_list_repos")]
-    [Description("Lists all Git repositories within a specific Azure DevOps project.")]
-    public async Task<string> AzureListReposAsync(
-        [Description("The name or ID of the project.")] string project,
-        CancellationToken cancellationToken = default)
+    public async Task<string> HandleAsync(AzureCommandArgs args, CancellationToken ct)
     {
-        logger.LogDebug("Listing Azure DevOps repos for project {Project}", project);
-        return await client.GetAsync(AzureProduct.DevOps,
-            $"{project}/_apis/git/repositories", "7.1", cancellationToken);
+        logger.LogDebug("Listing Azure DevOps repos for project {Project}", args.Project);
+        return await client.GetAsync(AzureProduct.DevOps, $"{args.Project}/_apis/git/repositories", "7.1", ct);
+    }
+}
+
+public sealed class AzureListPullRequestsActionHandler(IAzureHttpClient client, ILogger<AzureListPullRequestsActionHandler> logger) : IActionHandler<AzureCommandArgs>
+{
+    public string ActionName => "azure_list_pull_requests";
+
+    public string? Validate(AzureCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.Project)) return "Missing required parameter 'Project'.";
+        if (string.IsNullOrWhiteSpace(args.RepositoryId)) return "Missing required parameter 'RepositoryId'.";
+        return null;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
-    // Pull Requests
-    // ═════════════════════════════════════════════════════════════════════════
-
-    [McpServerTool(Name = "azure_list_pull_requests")]
-    [Description("Lists active pull requests for a specific repository.")]
-    public async Task<string> AzureListPullRequestsAsync(
-        [Description("The name or ID of the project.")] string project,
-        [Description("The name or ID of the repository.")] string repositoryId,
-        [Description("Maximum PRs to return (default 25).")] int top = 25,
-        CancellationToken cancellationToken = default)
+    public async Task<string> HandleAsync(AzureCommandArgs args, CancellationToken ct)
     {
-        top = Math.Clamp(top, 1, 100);
-        logger.LogDebug("Listing active PRs for {Project}/{Repo}", project, repositoryId);
+        int top = Math.Clamp(args.Top ?? 25, 1, 100);
+        logger.LogDebug("Listing active PRs for {Project}/{Repo}", args.Project, args.RepositoryId);
         return await client.GetAsync(AzureProduct.DevOps,
-            $"{project}/_apis/git/repositories/{repositoryId}/pullrequests?searchCriteria.status=active&$top={top}",
-            "7.1", cancellationToken);
+            $"{args.Project}/_apis/git/repositories/{args.RepositoryId}/pullrequests?searchCriteria.status=active&$top={top}",
+            "7.1", ct);
     }
 }
