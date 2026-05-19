@@ -9,6 +9,7 @@ using VenEl.MCPAssistant.GitHub.Extensions;
 using VenEl.MCPAssistant.MSSql.Extensions;
 using VenEl.MCPAssistant.Logging.Extensions;
 using VenEl.MCPAssistant.Docker.Extensions;
+using VenEl.MCPAssistant.LocalOffice.Extensions;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VenEl MCP Assistant – STDIO MCP Server
@@ -47,6 +48,7 @@ builder.Services.AddAzureFeature(builder.Configuration);
 builder.Services.AddGitHubFeature();
 builder.Services.AddDockerFeature();
 builder.Services.AddLoggingFeature(builder.Configuration);
+builder.Services.AddLocalOfficeTools();
 
 // Add future features below — one line each, fully independent:
 // builder.Services.AddAzureFeature(builder.Configuration);
