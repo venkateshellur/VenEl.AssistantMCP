@@ -18,4 +18,16 @@ public sealed class LocalOfficeCommandArgs
 
     [JsonPropertyName("value")]
     public string? Value { get; set; }
+
+    [JsonPropertyName("jsonData")]
+    public string? JsonData { get; set; }
+
+    [JsonPropertyName("includeHeaders")]
+    public bool? IncludeHeaders { get; set; }
+
+    [JsonPropertyName("clearExisting")]
+    public bool? ClearExisting { get; set; }
+
+    [JsonPropertyName("newSheetName")]
+    public string? NewSheetName { get; set; }
 }
