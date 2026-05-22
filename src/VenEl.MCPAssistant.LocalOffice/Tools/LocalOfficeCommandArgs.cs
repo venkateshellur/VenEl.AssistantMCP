@@ -30,4 +30,13 @@ public sealed class LocalOfficeCommandArgs
 
     [JsonPropertyName("newSheetName")]
     public string? NewSheetName { get; set; }
+
+    [JsonPropertyName("title")]
+    public string? Title { get; set; }
+
+    [JsonPropertyName("content")]
+    public string? Content { get; set; }
+
+    [JsonPropertyName("slideIndex")]
+    public int? SlideIndex { get; set; }
 }

@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "venel": {
-      "command": "C:\\Venky\\GIT\\VenEl.MCPAssistant\\VenEl.MCPAssistant\\publish\\VenEl.MCPAssistant.Server.exe",
-      "args": []
+      "command": "dotnet",
+      "args": [
+        "/Users/venkateshellur/Venky/Git/VenEl.MCPAssistant/VenEl.MCPAssistant/publish/VenEl.MCPAssistant.Server.dll"
+      ]
     }
   }
 }
