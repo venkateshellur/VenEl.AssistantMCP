@@ -37,4 +37,12 @@
     </Content>
   </ItemGroup>
 
+  <Target Name="EnableBitwardenOnPublish" AfterTargets="Publish">
+    <Message Text="Automatically enabling Bitwarden integration in the published appsettings.json..." Importance="high" />
+    <!-- macOS uses sed -i '' -->
+    <Exec Command="sed -i '' 's/&quot;IsEnabled&quot;: false/&quot;IsEnabled&quot;: true/g' &quot;$(PublishDir)appsettings.json&quot;" Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+    <!-- Linux uses sed -i -->
+    <Exec Command="sed -i 's/&quot;IsEnabled&quot;: false/&quot;IsEnabled&quot;: true/g' &quot;$(PublishDir)appsettings.json&quot;" Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
+  </Target>
+
 </Project>
