@@ -26,6 +26,7 @@
     <ProjectReference Include="..\VenEl.MCPAssistant.Kubernetes\VenEl.MCPAssistant.Kubernetes.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.AWS\VenEl.MCPAssistant.AWS.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.GCP\VenEl.MCPAssistant.GCP.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.Databricks\VenEl.MCPAssistant.Databricks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

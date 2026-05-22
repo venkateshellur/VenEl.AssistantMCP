@@ -14,6 +14,7 @@ using VenEl.MCPAssistant.Slack.Extensions;
 using VenEl.MCPAssistant.Kubernetes.Extensions;
 using VenEl.MCPAssistant.AWS.Extensions;
 using VenEl.MCPAssistant.GCP.Extensions;
+using VenEl.MCPAssistant.Databricks.Extensions;
 // ─────────────────────────────────────────────────────────────────────────────
 // VenEl MCP Assistant – STDIO MCP Server
 //
@@ -56,6 +57,7 @@ builder.Services.AddSlackFeature(builder.Configuration);
 builder.Services.AddKubernetesFeature();
 builder.Services.AddAwsFeature(builder.Configuration);
 builder.Services.AddGcpFeature(builder.Configuration);
+builder.Services.AddDatabricksFeature(builder.Configuration);
 // Add future features below — one line each, fully independent:
 // builder.Services.AddAzureFeature(builder.Configuration);
 // builder.Services.AddAwsFeature(builder.Configuration);
