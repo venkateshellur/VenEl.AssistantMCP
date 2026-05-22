@@ -101,4 +101,13 @@ public sealed class AtlassianCommandArgs
 
     [JsonPropertyName("comment")]
     public string? Comment { get; set; }
+
+    [JsonPropertyName("boardId")]
+    public int? BoardId { get; set; }
+
+    [JsonPropertyName("sprintId")]
+    public int? SprintId { get; set; }
+
+    [JsonPropertyName("pipelineTarget")]
+    public string? PipelineTarget { get; set; }
 }

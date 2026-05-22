@@ -18,7 +18,7 @@ public sealed class AtlassianDispatcherTool : DispatcherToolBase<AtlassianComman
     protected override string? GetRequestedAction(AtlassianCommandArgs args) => args.Action;
 
     [McpServerTool(Name = "mcp_venel_atlassian_commands")]
-    [Description("Atlassian Cloud tools: Jira issues/projects, Confluence pages/spaces, Bitbucket repositories/pull requests, and session credential setup.")]
+    [Description("Atlassian Cloud tools: Jira issues/projects/sprints, Confluence pages/spaces, Bitbucket repositories/pull requests/pipelines, and session credential setup.")]
     public Task<string> DispatchAtlassianCommandAsync(
         [Description("The arguments for the Atlassian command")] AtlassianCommandArgs args,
         CancellationToken ct)

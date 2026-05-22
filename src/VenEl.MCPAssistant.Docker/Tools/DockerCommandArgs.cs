@@ -18,4 +18,13 @@ public sealed class DockerCommandArgs
 
     [JsonPropertyName("all")]
     public bool? All { get; set; }
+
+    [JsonPropertyName("composeFilePath")]
+    public string? ComposeFilePath { get; set; }
+
+    [JsonPropertyName("dockerfilePath")]
+    public string? DockerfilePath { get; set; }
+
+    [JsonPropertyName("imageTag")]
+    public string? ImageTag { get; set; }
 }

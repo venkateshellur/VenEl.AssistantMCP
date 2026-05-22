@@ -10,6 +10,8 @@ using Microsoft.Extensions.Logging;
 using VenEl.MCPAssistant.Core.Dispatcher;
 using VenEl.MCPAssistant.MSSql.Guards;
 using VenEl.MCPAssistant.MSSql.Services;
+using ClosedXML.Excel;
+using System.IO;
 
 namespace VenEl.MCPAssistant.MSSql.Tools;
 
@@ -433,5 +435,92 @@ public sealed class SqlExecuteStoredProcedureActionHandler(ISqlConnectionFactory
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         return await MSSqlHelper.SerializeReaderAsync(reader, maxRows: 500, ct);
+    }
+}
+
+public sealed class SqlExportToExcelActionHandler(ISqlConnectionFactory factory) : IActionHandler<MSSqlCommandArgs>
+{
+    public string ActionName => "sql_export_to_excel";
+
+    public string? Validate(MSSqlCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.ServerName) && string.IsNullOrWhiteSpace(args.ConnectionString))
+            return "You must provide either ServerName or ConnectionString.";
+        if (string.IsNullOrWhiteSpace(args.Query))
+            return "Missing required parameter 'Query'.";
+        if (string.IsNullOrWhiteSpace(args.ExcelExportPath))
+            return "Missing required parameter 'ExcelExportPath'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(MSSqlCommandArgs args, CancellationToken ct)
+    {
+        if (SqlSafetyGuard.IsDestructive(args.Query!))
+        {
+            return $"[BLOCKED] Destructive queries are not allowed for Excel export.";
+        }
+
+        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = args.Query!;
+        cmd.CommandType = CommandType.Text;
+        cmd.CommandTimeout = 120;
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        
+        using var workbook = new XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("QueryResults");
+        
+        // Write headers
+        for (int i = 0; i < reader.FieldCount; i++)
+        {
+            worksheet.Cell(1, i + 1).Value = reader.GetName(i);
+        }
+
+        // Write rows
+        int rowIdx = 2;
+        while (await reader.ReadAsync(ct))
+        {
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                if (!reader.IsDBNull(i))
+                {
+                    worksheet.Cell(rowIdx, i + 1).Value = XLCellValue.FromObject(reader.GetValue(i));
+                }
+            }
+            rowIdx++;
+        }
+
+        workbook.SaveAs(args.ExcelExportPath!);
+        return $"Query results successfully exported to {args.ExcelExportPath}";
+    }
+}
+
+public sealed class SqlGenerateSchemaActionHandler(ISqlConnectionFactory factory) : IActionHandler<MSSqlCommandArgs>
+{
+    public string ActionName => "sql_generate_schema";
+
+    public string? Validate(MSSqlCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.ServerName) && string.IsNullOrWhiteSpace(args.ConnectionString))
+            return "You must provide either ServerName or ConnectionString.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(MSSqlCommandArgs args, CancellationToken ct)
+    {
+        const string sql = @"
+            SELECT 
+                TABLE_SCHEMA + '.' + TABLE_NAME as TableName, 
+                COLUMN_NAME as ColumnName, 
+                DATA_TYPE as DataType 
+            FROM INFORMATION_SCHEMA.COLUMNS
+            ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
+        ";
+
+        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await conn.OpenAsync(ct);
+        return await MSSqlHelper.ExecuteReaderAsync(conn, sql, [], 5000, ct);
     }
 }

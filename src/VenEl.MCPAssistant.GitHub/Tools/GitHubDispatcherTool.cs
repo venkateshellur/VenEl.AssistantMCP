@@ -18,7 +18,7 @@ public sealed class GitHubDispatcherTool : DispatcherToolBase<GitHubCommandArgs>
     protected override string? GetRequestedAction(GitHubCommandArgs args) => args.Action;
 
     [McpServerTool(Name = "mcp_venel_github_commands")]
-    [Description("GitHub tools: projects, repositories, pull requests, diffs, and session credential setup.")]
+    [Description("GitHub tools: projects, repositories, pull requests, diffs, GitHub Actions (workflows), and session credential setup.")]
     public Task<string> DispatchGitHubCommandAsync(
         [Description("The arguments for the GitHub command")] GitHubCommandArgs args,
         CancellationToken ct)

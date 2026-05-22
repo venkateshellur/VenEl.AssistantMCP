@@ -177,3 +177,38 @@ public sealed class BitbucketCreatePullRequestActionHandler(
             $"repositories/{workspace}/{args.RepoSlug}/pullrequests", payload, ct);
     }
 }
+
+public sealed class BitbucketTriggerPipelineActionHandler(
+    IAtlassianHttpClient client,
+    IOptions<AtlassianOptions> options,
+    AtlassianSessionCredentials session,
+    ILogger<BitbucketTriggerPipelineActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "bitbucket_trigger_pipeline";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.RepoSlug)) return "Missing required parameter 'RepoSlug'.";
+        if (string.IsNullOrWhiteSpace(args.PipelineTarget)) return "Missing required parameter 'PipelineTarget' (e.g. branch name).";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        var workspace = BitbucketHelper.RequireWorkspace(session, options);
+        logger.LogDebug("Triggering pipeline on {Target} for {Workspace}/{Repo}", args.PipelineTarget, workspace, args.RepoSlug);
+
+        var payload = new
+        {
+            target = new
+            {
+                ref_type = "branch",
+                type = "pipeline_ref_target",
+                ref_name = args.PipelineTarget
+            }
+        };
+
+        return await client.PostAsync(AtlassianProduct.Bitbucket,
+            $"repositories/{workspace}/{args.RepoSlug}/pipelines/", payload, ct);
+    }
+}

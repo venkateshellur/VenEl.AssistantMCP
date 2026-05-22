@@ -39,4 +39,7 @@ public class MSSqlCommandArgs
 
     [Description("Parameters as a JSON object: {\"@ParamName\": value, ...}. Pass {} for no parameters. Used by sql_execute_stored_procedure.")]
     public string? ParametersJson { get; set; }
+
+    [Description("Path to save Excel export to. Used by sql_export_to_excel.")]
+    public string? ExcelExportPath { get; set; }
 }

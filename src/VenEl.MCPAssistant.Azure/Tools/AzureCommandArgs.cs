@@ -23,4 +23,11 @@ public class AzureCommandArgs
 
     [Description("Your Azure Personal Access Token (PAT). Used by azure_configure.")]
     public string? PatToken { get; set; }
+
+    // Pipelines specific
+    [Description("The ID of the pipeline. Used by azure_list_pipelines, azure_run_pipeline.")]
+    public int? PipelineId { get; set; }
+
+    [Description("The ID of the pipeline run. Used by azure_run_pipeline.")]
+    public int? RunId { get; set; }
 }

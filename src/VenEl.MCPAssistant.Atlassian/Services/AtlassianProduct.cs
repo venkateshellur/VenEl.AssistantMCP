@@ -14,4 +14,7 @@ public enum AtlassianProduct
 
     /// <summary>Bitbucket Cloud REST API v2 — https://api.bitbucket.org/2.0/</summary>
     Bitbucket,
+
+    /// <summary>Jira Agile REST API v1.0 — https://{domain}/rest/agile/1.0/</summary>
+    JiraAgile,
 }

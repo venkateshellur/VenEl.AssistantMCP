@@ -18,7 +18,7 @@ public class MSSqlDispatcherTool : DispatcherToolBase<MSSqlCommandArgs>
     protected override string? GetRequestedAction(MSSqlCommandArgs args) => args.Action;
 
     [McpServerTool(Name = "mssql_commands")]
-    [Description("Microsoft SQL Server tools: execute queries, modify data, call stored procedures, and inspect schema.")]
+    [Description("Microsoft SQL Server tools: execute queries, modify data, call stored procedures, inspect schema, and export to Excel.")]
     public Task<string> ExecuteAsync(MSSqlCommandArgs args, CancellationToken ct)
     {
         return DispatchAsync(args, ct);

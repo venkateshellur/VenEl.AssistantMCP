@@ -57,4 +57,16 @@ public sealed class GitHubCommandArgs
     /// </summary>
     [JsonPropertyName("base")]
     public string? Base { get; set; }
+
+    /// <summary>
+    /// The workflow ID or filename. Used for GitHub Actions.
+    /// </summary>
+    [JsonPropertyName("workflowId")]
+    public string? WorkflowId { get; set; }
+
+    /// <summary>
+    /// The git reference for the workflow run (e.g., 'main').
+    /// </summary>
+    [JsonPropertyName("ref")]
+    public string? Ref { get; set; }
 }

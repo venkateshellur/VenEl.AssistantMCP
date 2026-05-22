@@ -18,7 +18,7 @@ public sealed class DockerDispatcherTool : DispatcherToolBase<DockerCommandArgs>
     protected override string? GetRequestedAction(DockerCommandArgs args) => args.Action;
 
     [McpServerTool(Name = "mcp_venel_docker_commands")]
-    [Description("Docker Management tools: list/start/stop/restart containers, view logs, and list images via the Docker CLI.")]
+    [Description("Docker Management tools: list/start/stop/restart containers, view logs, list/build images, and compose up/down via the Docker CLI.")]
     public Task<string> DispatchDockerCommandAsync(
         [Description("The arguments for the Docker command")] DockerCommandArgs args,
         CancellationToken ct)

@@ -189,3 +189,35 @@ public sealed class JiraTransitionIssueActionHandler(IAtlassianHttpClient client
             new { transition = new { id = args.TransitionId } }, ct);
     }
 }
+
+public sealed class JiraListBoardsActionHandler(IAtlassianHttpClient client, ILogger<JiraListBoardsActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "jira_list_boards";
+
+    public string? Validate(AtlassianCommandArgs args) => null;
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        int maxResults = Math.Clamp(args.MaxResults ?? 50, 1, 100);
+        logger.LogDebug("Listing Jira boards (maxResults={Max})", maxResults);
+        return await client.GetAsync(AtlassianProduct.JiraAgile, $"board?maxResults={maxResults}", ct);
+    }
+}
+
+public sealed class JiraListSprintsActionHandler(IAtlassianHttpClient client, ILogger<JiraListSprintsActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "jira_list_sprints";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (args.BoardId == null) return "Missing required parameter 'BoardId'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        int maxResults = Math.Clamp(args.MaxResults ?? 50, 1, 100);
+        logger.LogDebug("Listing Jira sprints for board {BoardId} (maxResults={Max})", args.BoardId, maxResults);
+        return await client.GetAsync(AtlassianProduct.JiraAgile, $"board/{args.BoardId}/sprint?maxResults={maxResults}", ct);
+    }
+}

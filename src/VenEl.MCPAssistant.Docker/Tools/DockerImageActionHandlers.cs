@@ -16,3 +16,22 @@ public sealed class DockerListImagesActionHandler(IDockerCliService dockerCli) :
         return await dockerCli.ExecuteCommandAsync($"images --format \"{{{{json .}}}}\"", ct);
     }
 }
+
+public sealed class DockerBuildImageActionHandler(IDockerCliService dockerCli) : IActionHandler<DockerCommandArgs>
+{
+    public string ActionName => "docker_build_image";
+
+    public string? Validate(DockerCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.DockerfilePath)) return "Missing DockerfilePath";
+        if (string.IsNullOrWhiteSpace(args.ImageTag)) return "Missing ImageTag";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(DockerCommandArgs args, CancellationToken ct)
+    {
+        var contextDir = System.IO.Path.GetDirectoryName(args.DockerfilePath);
+        if (string.IsNullOrEmpty(contextDir)) contextDir = ".";
+        return await dockerCli.ExecuteCommandAsync($"build -t {args.ImageTag} -f {args.DockerfilePath} {contextDir}", ct);
+    }
+}

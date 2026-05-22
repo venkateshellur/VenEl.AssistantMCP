@@ -106,6 +106,7 @@ public sealed class AtlassianHttpClient(
         product switch
         {
             AtlassianProduct.Jira       => $"https://{Domain}/rest/api/3/{path.TrimStart('/')}",
+            AtlassianProduct.JiraAgile  => $"https://{Domain}/rest/agile/1.0/{path.TrimStart('/')}",
             AtlassianProduct.Confluence => $"https://{Domain}/wiki/rest/api/{path.TrimStart('/')}",
             AtlassianProduct.Bitbucket  => $"https://api.bitbucket.org/2.0/{path.TrimStart('/')}",
             _                           => throw new ArgumentOutOfRangeException(nameof(product)),

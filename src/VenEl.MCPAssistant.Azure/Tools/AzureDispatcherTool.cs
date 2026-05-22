@@ -18,7 +18,7 @@ public class AzureDispatcherTool : DispatcherToolBase<AzureCommandArgs>
     protected override string? GetRequestedAction(AzureCommandArgs args) => args.Action;
 
     [McpServerTool(Name = "azure_commands")]
-    [Description("Azure DevOps tools: projects, repositories, pull requests, and session credential setup.")]
+    [Description("Azure DevOps tools: projects, repositories, pull requests, pipelines, and session credential setup.")]
     public Task<string> ExecuteAsync(AzureCommandArgs args, CancellationToken ct)
     {
         return DispatchAsync(args, ct);
