@@ -10,9 +10,9 @@ namespace VenEl.MCPAssistant.GitHub.Services;
 
 public interface IGitHubHttpClient
 {
-    Task<string> GetAsync(string path, CancellationToken cancellationToken = default);
-    Task<string> PostAsync(string path, object body, CancellationToken cancellationToken = default);
-    Task<string> PutAsync(string path, object body, CancellationToken cancellationToken = default);
+    Task<string> GetAsync(string path, CancellationToken cancellationToken = default, string? acceptHeader = null);
+    Task<string> PostAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null);
+    Task<string> PutAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null);
 }
 
 public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession session) : IGitHubHttpClient
@@ -20,20 +20,21 @@ public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession sessio
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
     private const string BaseUrl = "https://api.github.com";
 
-    public Task<string> GetAsync(string path, CancellationToken cancellationToken = default)
-        => SendAsync(HttpMethod.Get, path, body: null, cancellationToken);
+    public Task<string> GetAsync(string path, CancellationToken cancellationToken = default, string? acceptHeader = null)
+        => SendAsync(HttpMethod.Get, path, body: null, cancellationToken, acceptHeader);
 
-    public Task<string> PostAsync(string path, object body, CancellationToken cancellationToken = default)
-        => SendAsync(HttpMethod.Post, path, body, cancellationToken);
+    public Task<string> PostAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null)
+        => SendAsync(HttpMethod.Post, path, body, cancellationToken, acceptHeader);
 
-    public Task<string> PutAsync(string path, object body, CancellationToken cancellationToken = default)
-        => SendAsync(HttpMethod.Put, path, body, cancellationToken);
+    public Task<string> PutAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null)
+        => SendAsync(HttpMethod.Put, path, body, cancellationToken, acceptHeader);
 
     private async Task<string> SendAsync(
         HttpMethod method,
         string path,
         object? body,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? acceptHeader = null)
     {
         if (string.IsNullOrWhiteSpace(session.PatToken))
             return "[CONFIG ERROR] No GitHub PAT found in session. Please call 'github_configure' with your PAT first.";
@@ -41,7 +42,9 @@ public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession sessio
         var url = $"{BaseUrl}/{path.TrimStart('/')}";
         using var request = new HttpRequestMessage(method, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.PatToken);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github.v3+json"));
+        
+        var accept = acceptHeader ?? "application/vnd.github.v3+json";
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(accept));
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("VenEl.MCPAssistant", "1.0"));
 
         if (body is not null)

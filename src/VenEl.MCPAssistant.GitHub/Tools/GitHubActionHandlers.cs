@@ -130,3 +130,22 @@ public sealed class GitHubMergePullRequestActionHandler(IGitHubHttpClient client
         return await client.PutAsync($"repos/{args.Owner}/{args.Repo}/pulls/{args.PullRequestNumber}/merge", body, ct);
     }
 }
+
+public sealed class GitHubGetPrDiffActionHandler(IGitHubHttpClient client, ILogger<GitHubGetPrDiffActionHandler> logger) : IActionHandler<GitHubCommandArgs>
+{
+    public string ActionName => "github_get_pr_diff";
+
+    public string? Validate(GitHubCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.Owner)) return "Missing required parameter 'Owner'.";
+        if (string.IsNullOrWhiteSpace(args.Repo)) return "Missing required parameter 'Repo'.";
+        if (!args.PullRequestNumber.HasValue) return "Missing required parameter 'PullRequestNumber'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(GitHubCommandArgs args, CancellationToken ct)
+    {
+        logger.LogDebug("Getting PR Diff for {Owner}/{Repo} PR #{Number}", args.Owner, args.Repo, args.PullRequestNumber);
+        return await client.GetAsync($"repos/{args.Owner}/{args.Repo}/pulls/{args.PullRequestNumber}", ct, acceptHeader: "application/vnd.github.v3.diff");
+    }
+}

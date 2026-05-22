@@ -15,15 +15,17 @@
 
   <ItemGroup>
     <ProjectReference Include="..\VenEl.MCPAssistant.Core\VenEl.MCPAssistant.Core.csproj" />
-    <ProjectReference Include="..\VenEl.MCPAssistant.MSSql\VenEl.MCPAssistant.MSSql.csproj" />
-    <ProjectReference Include="..\VenEl.MCPAssistant.Atlassian\VenEl.MCPAssistant.Atlassian.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Azure\VenEl.MCPAssistant.Azure.csproj" />
-    <ProjectReference Include="..\VenEl.MCPAssistant.GitHub\VenEl.MCPAssistant.GitHub.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Logging\VenEl.MCPAssistant.Logging.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Docker\VenEl.MCPAssistant.Docker.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.GitHub\VenEl.MCPAssistant.GitHub.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.MSSql\VenEl.MCPAssistant.MSSql.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.Atlassian\VenEl.MCPAssistant.Atlassian.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.LocalOffice\VenEl.MCPAssistant.LocalOffice.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Slack\VenEl.MCPAssistant.Slack.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Kubernetes\VenEl.MCPAssistant.Kubernetes.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.AWS\VenEl.MCPAssistant.AWS.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.GCP\VenEl.MCPAssistant.GCP.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -12,6 +12,8 @@ using VenEl.MCPAssistant.Docker.Extensions;
 using VenEl.MCPAssistant.LocalOffice.Extensions;
 using VenEl.MCPAssistant.Slack.Extensions;
 using VenEl.MCPAssistant.Kubernetes.Extensions;
+using VenEl.MCPAssistant.AWS.Extensions;
+using VenEl.MCPAssistant.GCP.Extensions;
 // ─────────────────────────────────────────────────────────────────────────────
 // VenEl MCP Assistant – STDIO MCP Server
 //
@@ -52,6 +54,8 @@ builder.Services.AddLoggingFeature(builder.Configuration);
 builder.Services.AddLocalOfficeTools();
 builder.Services.AddSlackFeature(builder.Configuration);
 builder.Services.AddKubernetesFeature();
+builder.Services.AddAwsFeature(builder.Configuration);
+builder.Services.AddGcpFeature(builder.Configuration);
 // Add future features below — one line each, fully independent:
 // builder.Services.AddAzureFeature(builder.Configuration);
 // builder.Services.AddAwsFeature(builder.Configuration);
