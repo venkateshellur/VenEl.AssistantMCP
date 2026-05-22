@@ -11,6 +11,12 @@ public static class BitwardenFeatureExtensions
 {
     public static IServiceCollection AddBitwardenFeature(this IServiceCollection services, IConfiguration configuration)
     {
+        var isEnabled = configuration.GetValue<bool>("Bitwarden:IsEnabled", true);
+        if (!isEnabled)
+        {
+            return services;
+        }
+
         services.AddOptions<BitwardenOptions>().Bind(configuration.GetSection("Bitwarden"));
 
         // Register the specific services
@@ -35,5 +41,6 @@ public static class BitwardenFeatureExtensions
 
 public class BitwardenOptions
 {
+    public bool IsEnabled { get; set; } = true;
     public string? MachineToken { get; set; }
 }
