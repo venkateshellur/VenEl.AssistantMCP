@@ -15,6 +15,7 @@ using VenEl.MCPAssistant.Kubernetes.Extensions;
 using VenEl.MCPAssistant.AWS.Extensions;
 using VenEl.MCPAssistant.GCP.Extensions;
 using VenEl.MCPAssistant.Databricks.Extensions;
+using VenEl.MCPAssistant.Bitwarden.Extensions;
 // ─────────────────────────────────────────────────────────────────────────────
 // VenEl MCP Assistant – STDIO MCP Server
 //
@@ -58,6 +59,7 @@ builder.Services.AddKubernetesFeature();
 builder.Services.AddAwsFeature(builder.Configuration);
 builder.Services.AddGcpFeature(builder.Configuration);
 builder.Services.AddDatabricksFeature(builder.Configuration);
+builder.Services.AddBitwardenFeature(builder.Configuration);
 // Add future features below — one line each, fully independent:
 // builder.Services.AddAzureFeature(builder.Configuration);
 // builder.Services.AddAwsFeature(builder.Configuration);

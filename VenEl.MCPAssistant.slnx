@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/VenEl.MCPAssistant.Azure/VenEl.MCPAssistant.Azure.csproj" />
+    <Project Path="src/VenEl.MCPAssistant.Bitwarden/VenEl.MCPAssistant.Bitwarden.csproj" />
     <Project Path="src/VenEl.MCPAssistant.Core/VenEl.MCPAssistant.Core.csproj" />
     <Project Path="src/VenEl.MCPAssistant.LocalOffice/VenEl.MCPAssistant.LocalOffice.csproj" />
     <Project Path="src/VenEl.MCPAssistant.MSSql/VenEl.MCPAssistant.MSSql.csproj" />
