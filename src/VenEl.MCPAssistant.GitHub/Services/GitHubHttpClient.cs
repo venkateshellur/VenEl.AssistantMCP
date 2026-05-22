@@ -5,6 +5,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Options;
+using VenEl.MCPAssistant.GitHub.Configuration;
 
 namespace VenEl.MCPAssistant.GitHub.Services;
 
@@ -15,7 +17,7 @@ public interface IGitHubHttpClient
     Task<string> PutAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null);
 }
 
-public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession session) : IGitHubHttpClient
+public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession session, IOptions<GitHubOptions> options) : IGitHubHttpClient
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
     private const string BaseUrl = "https://api.github.com";
@@ -36,12 +38,16 @@ public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession sessio
         CancellationToken cancellationToken,
         string? acceptHeader = null)
     {
-        if (string.IsNullOrWhiteSpace(session.PatToken))
-            return "[CONFIG ERROR] No GitHub PAT found in session. Please call 'github_configure' with your PAT first.";
+        var token = session.PatToken 
+            ?? Environment.GetEnvironmentVariable("GITHUB_PAT") 
+            ?? options.Value.PatToken;
+
+        if (string.IsNullOrWhiteSpace(token))
+            return "[CONFIG ERROR] No GitHub PAT found in session, environment variables (GITHUB_PAT), or appsettings.json (GitHub:PatToken). Please call 'github_configure' with your PAT first.";
 
         var url = $"{BaseUrl}/{path.TrimStart('/')}";
         using var request = new HttpRequestMessage(method, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.PatToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         
         var accept = acceptHeader ?? "application/vnd.github.v3+json";
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(accept));

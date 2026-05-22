@@ -149,3 +149,21 @@ public sealed class GitHubGetPrDiffActionHandler(IGitHubHttpClient client, ILogg
         return await client.GetAsync($"repos/{args.Owner}/{args.Repo}/pulls/{args.PullRequestNumber}", ct, acceptHeader: "application/vnd.github.v3.diff");
     }
 }
+
+public sealed class GitHubListCommitsActionHandler(IGitHubHttpClient client, ILogger<GitHubListCommitsActionHandler> logger) : IActionHandler<GitHubCommandArgs>
+{
+    public string ActionName => "github_list_commits";
+
+    public string? Validate(GitHubCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.Owner)) return "Missing required parameter 'Owner'.";
+        if (string.IsNullOrWhiteSpace(args.Repo)) return "Missing required parameter 'Repo'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(GitHubCommandArgs args, CancellationToken ct)
+    {
+        logger.LogDebug("Listing GitHub commits for {Owner}/{Repo}", args.Owner, args.Repo);
+        return await client.GetAsync($"repos/{args.Owner}/{args.Repo}/commits?per_page=5", ct);
+    }
+}

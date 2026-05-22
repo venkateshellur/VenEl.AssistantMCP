@@ -48,7 +48,7 @@ builder.Logging
 builder.Services.AddMSSqlFeature(builder.Configuration);
 builder.Services.AddAtlassianFeature(builder.Configuration);
 builder.Services.AddAzureFeature(builder.Configuration);
-builder.Services.AddGitHubFeature();
+builder.Services.AddGitHubFeature(builder.Configuration);
 builder.Services.AddDockerFeature();
 builder.Services.AddLoggingFeature(builder.Configuration);
 builder.Services.AddLocalOfficeTools();

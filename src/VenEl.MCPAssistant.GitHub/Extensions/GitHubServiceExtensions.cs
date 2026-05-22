@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using VenEl.MCPAssistant.Core.Registration;
+using VenEl.MCPAssistant.GitHub.Configuration;
 using VenEl.MCPAssistant.GitHub.Services;
 using VenEl.MCPAssistant.GitHub.Tools;
 
@@ -7,8 +9,10 @@ namespace VenEl.MCPAssistant.GitHub.Extensions;
 
 public static class GitHubServiceExtensions
 {
-    public static IServiceCollection AddGitHubFeature(this IServiceCollection services)
+    public static IServiceCollection AddGitHubFeature(this IServiceCollection services, IConfiguration config)
     {
+        services.Configure<GitHubOptions>(config.GetSection("GitHub"));
+
         // Register Session State
         services.AddSingleton<GitHubSession>();
 
