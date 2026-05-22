@@ -22,6 +22,8 @@
     <ProjectReference Include="..\VenEl.MCPAssistant.Logging\VenEl.MCPAssistant.Logging.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.Docker\VenEl.MCPAssistant.Docker.csproj" />
     <ProjectReference Include="..\VenEl.MCPAssistant.LocalOffice\VenEl.MCPAssistant.LocalOffice.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.Slack\VenEl.MCPAssistant.Slack.csproj" />
+    <ProjectReference Include="..\VenEl.MCPAssistant.Kubernetes\VenEl.MCPAssistant.Kubernetes.csproj" />
   </ItemGroup>
 
   <ItemGroup>
