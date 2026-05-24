@@ -3,6 +3,8 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using VenEl.MCPAssistant.Atlassian.Configuration;
 
+using VenEl.MCPAssistant.Core.Security;
+
 namespace VenEl.MCPAssistant.Atlassian.Services.Auth;
 
 /// <summary>
@@ -12,7 +14,8 @@ namespace VenEl.MCPAssistant.Atlassian.Services.Auth;
 /// </summary>
 public sealed class OAuthAuthProvider(
     IOptions<AtlassianOptions> options,
-    IHttpClientFactory httpClientFactory) : IAtlassianAuthProvider
+    IHttpClientFactory httpClientFactory,
+    SecretManager secretManager) : IAtlassianAuthProvider
 {
     private const string TokenEndpoint = "https://auth.atlassian.com/oauth/token";
 
@@ -49,12 +52,14 @@ public sealed class OAuthAuthProvider(
     private async Task RefreshTokenAsync(CancellationToken cancellationToken)
     {
         using var http = httpClientFactory.CreateClient();
+        
+        var clientSecret = await secretManager.ResolveSecretAsync(_opts.ClientSecret, cancellationToken);
 
         var body = new FormUrlEncodedContent(
         [
             new KeyValuePair<string, string>("grant_type",    "client_credentials"),
             new KeyValuePair<string, string>("client_id",     _opts.ClientId),
-            new KeyValuePair<string, string>("client_secret", _opts.ClientSecret),
+            new KeyValuePair<string, string>("client_secret", clientSecret ?? string.Empty),
             new KeyValuePair<string, string>("audience",      "api.atlassian.com"),
         ]);
 

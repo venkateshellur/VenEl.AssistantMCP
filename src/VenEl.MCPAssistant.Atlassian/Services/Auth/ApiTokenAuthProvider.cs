@@ -4,6 +4,8 @@ using Microsoft.Extensions.Options;
 using VenEl.MCPAssistant.Atlassian.Configuration;
 using VenEl.MCPAssistant.Atlassian.Services;
 
+using VenEl.MCPAssistant.Core.Security;
+
 namespace VenEl.MCPAssistant.Atlassian.Services.Auth;
 
 /// <summary>
@@ -13,21 +15,23 @@ namespace VenEl.MCPAssistant.Atlassian.Services.Auth;
 /// </summary>
 public sealed class ApiTokenAuthProvider(
     IOptions<AtlassianOptions> options,
-    AtlassianSessionCredentials session) : IAtlassianAuthProvider
+    AtlassianSessionCredentials session,
+    SecretManager secretManager) : IAtlassianAuthProvider
 {
-    public Task<AuthenticationHeaderValue?> GetAuthHeaderAsync(CancellationToken cancellationToken = default)
+    public async Task<AuthenticationHeaderValue?> GetAuthHeaderAsync(CancellationToken cancellationToken = default)
     {
         // Session credentials (conversation-supplied) take precedence.
         var email = !string.IsNullOrWhiteSpace(session.Email)    ? session.Email    : options.Value.ApiToken.Email;
-        var token = !string.IsNullOrWhiteSpace(session.ApiToken) ? session.ApiToken : options.Value.ApiToken.Token;
+        var rawToken = !string.IsNullOrWhiteSpace(session.ApiToken) ? session.ApiToken : options.Value.ApiToken.Token;
+        
+        var token = await secretManager.ResolveSecretAsync(rawToken, cancellationToken);
 
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(token))
-            return Task.FromResult<AuthenticationHeaderValue?>(null);
+            return null;
 
         var encoded = Convert.ToBase64String(
             Encoding.UTF8.GetBytes($"{email}:{token}"));
 
-        return Task.FromResult<AuthenticationHeaderValue?>(
-            new AuthenticationHeaderValue("Basic", encoded));
+        return new AuthenticationHeaderValue("Basic", encoded);
     }
 }

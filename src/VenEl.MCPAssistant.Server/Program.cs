@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using VenEl.MCPAssistant.Core.Registration;
+using VenEl.MCPAssistant.Core.Extensions;
 using VenEl.MCPAssistant.Atlassian.Extensions;
 using VenEl.MCPAssistant.Azure.Extensions;
 using VenEl.MCPAssistant.GitHub.Extensions;
@@ -47,6 +48,7 @@ builder.Logging
 // shared McpFeatureRegistry. Program.cs never references tool types directly.
 // ─────────────────────────────────────────────────────────────────────────────
 
+builder.Services.AddCoreSecurity();
 builder.Services.AddMSSqlFeature(builder.Configuration);
 builder.Services.AddAtlassianFeature(builder.Configuration);
 builder.Services.AddAzureFeature(builder.Configuration);

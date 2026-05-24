@@ -4,6 +4,7 @@ using VenEl.MCPAssistant.Bitwarden.Services;
 using VenEl.MCPAssistant.Bitwarden.Tools;
 using VenEl.MCPAssistant.Core.Dispatcher;
 using VenEl.MCPAssistant.Core.Registration;
+using VenEl.MCPAssistant.Core.Security;
 
 namespace VenEl.MCPAssistant.Bitwarden.Extensions;
 
@@ -25,6 +26,7 @@ public static class BitwardenFeatureExtensions
 
         // Register the Strategy Service as the primary implementation
         services.AddTransient<IBitwardenService, BitwardenStrategyService>();
+        services.AddSingleton<ISecretResolver, BitwardenSecretResolver>();
 
         services.AddTransient<IActionHandler<BitwardenCommandArgs>, BitwardenActionHandlers>();
         

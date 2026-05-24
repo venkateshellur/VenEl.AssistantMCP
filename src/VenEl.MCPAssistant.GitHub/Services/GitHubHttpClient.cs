@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using VenEl.MCPAssistant.GitHub.Configuration;
 
+using VenEl.MCPAssistant.Core.Security;
+
 namespace VenEl.MCPAssistant.GitHub.Services;
 
 public interface IGitHubHttpClient
@@ -17,7 +19,7 @@ public interface IGitHubHttpClient
     Task<string> PutAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null);
 }
 
-public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession session, IOptions<GitHubOptions> options) : IGitHubHttpClient
+public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession session, IOptions<GitHubOptions> options, SecretManager secretManager) : IGitHubHttpClient
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
     private const string BaseUrl = "https://api.github.com";
@@ -40,7 +42,7 @@ public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession sessio
     {
         var token = session.PatToken 
             ?? Environment.GetEnvironmentVariable("GITHUB_PAT") 
-            ?? options.Value.PatToken;
+            ?? await secretManager.ResolveSecretAsync(options.Value.PatToken, cancellationToken);
 
         if (string.IsNullOrWhiteSpace(token))
             return "[CONFIG ERROR] No GitHub PAT found in session, environment variables (GITHUB_PAT), or appsettings.json (GitHub:PatToken). Please call 'github_configure' with your PAT first.";
