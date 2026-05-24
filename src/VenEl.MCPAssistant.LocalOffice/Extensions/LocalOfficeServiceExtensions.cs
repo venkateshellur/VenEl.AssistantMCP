@@ -1,13 +1,16 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using VenEl.MCPAssistant.Core.Registration;
+using VenEl.MCPAssistant.LocalOffice.Configuration;
 using VenEl.MCPAssistant.LocalOffice.Tools;
 
 namespace VenEl.MCPAssistant.LocalOffice.Extensions;
 
 public static class LocalOfficeServiceExtensions
 {
-    public static IServiceCollection AddLocalOfficeTools(this IServiceCollection services)
+    public static IServiceCollection AddLocalOfficeTools(this IServiceCollection services, IConfiguration configuration)
     {
+        services.Configure<LocalOfficeOptions>(configuration.GetSection(LocalOfficeOptions.SectionName));
         // ── Self-register MCP tools into the shared registry ──────────────────
         services.GetOrAddFeatureRegistry().Register(
             featureName: "LocalOffice",

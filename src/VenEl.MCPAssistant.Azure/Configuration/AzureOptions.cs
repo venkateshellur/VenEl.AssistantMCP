@@ -11,4 +11,6 @@ public sealed class AzureOptions
     public string PreferredAuthMethod { get; set; } = "Pat";
 
     public PatOptions Pat { get; set; } = new();
+
+    public bool AllowResourceDeletion { get; set; } = false;
 }

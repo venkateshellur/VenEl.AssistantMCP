@@ -8,6 +8,8 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using VenEl.MCPAssistant.Core.Dispatcher;
+using VenEl.MCPAssistant.LocalOffice.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace VenEl.MCPAssistant.LocalOffice.Tools;
 
@@ -43,14 +45,15 @@ public sealed class LocalReadWordTextActionHandler : IActionHandler<LocalOfficeC
     }
 }
 
-public sealed class LocalWriteWordTextActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalWriteWordTextActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_write_word_text";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileOverwrite) return "File modification is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
-        if (string.IsNullOrEmpty(args.Content)) return "Missing Content";
+        if (string.IsNullOrWhiteSpace(args.Content)) return "Missing Content";
         return null;
     }
 
@@ -102,12 +105,13 @@ public sealed class LocalWriteWordTextActionHandler : IActionHandler<LocalOffice
     }
 }
 
-public sealed class LocalReplaceWordPlaceholderActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalReplaceWordPlaceholderActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_replace_word_placeholder";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileOverwrite) return "File modification is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
         if (!File.Exists(args.FilePath)) return $"File not found: {args.FilePath}";
         if (string.IsNullOrWhiteSpace(args.JsonData)) return "Missing JsonData";

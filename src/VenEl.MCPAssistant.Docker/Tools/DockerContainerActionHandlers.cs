@@ -2,7 +2,9 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using VenEl.MCPAssistant.Core.Dispatcher;
+using VenEl.MCPAssistant.Docker.Configuration;
 using VenEl.MCPAssistant.Docker.Services;
+using Microsoft.Extensions.Options;
 
 namespace VenEl.MCPAssistant.Docker.Tools;
 
@@ -31,11 +33,15 @@ public sealed class DockerStartContainerActionHandler(IDockerCliService dockerCl
     }
 }
 
-public sealed class DockerStopContainerActionHandler(IDockerCliService dockerCli) : IActionHandler<DockerCommandArgs>
+public sealed class DockerStopContainerActionHandler(IDockerCliService dockerCli, IOptions<DockerOptions> options) : IActionHandler<DockerCommandArgs>
 {
     public string ActionName => "docker_stop_container";
 
-    public string? Validate(DockerCommandArgs args) => string.IsNullOrWhiteSpace(args.ContainerId) ? "Missing ContainerId" : null;
+    public string? Validate(DockerCommandArgs args)
+    {
+        if (!options.Value.AllowDestructiveOperations) return "Destructive operations are disabled by safety switch.";
+        return string.IsNullOrWhiteSpace(args.ContainerId) ? "Missing ContainerId" : null;
+    }
 
     public async Task<string> HandleAsync(DockerCommandArgs args, CancellationToken ct)
     {
@@ -43,11 +49,15 @@ public sealed class DockerStopContainerActionHandler(IDockerCliService dockerCli
     }
 }
 
-public sealed class DockerRestartContainerActionHandler(IDockerCliService dockerCli) : IActionHandler<DockerCommandArgs>
+public sealed class DockerRestartContainerActionHandler(IDockerCliService dockerCli, IOptions<DockerOptions> options) : IActionHandler<DockerCommandArgs>
 {
     public string ActionName => "docker_restart_container";
 
-    public string? Validate(DockerCommandArgs args) => string.IsNullOrWhiteSpace(args.ContainerId) ? "Missing ContainerId" : null;
+    public string? Validate(DockerCommandArgs args)
+    {
+        if (!options.Value.AllowDestructiveOperations) return "Destructive operations are disabled by safety switch.";
+        return string.IsNullOrWhiteSpace(args.ContainerId) ? "Missing ContainerId" : null;
+    }
 
     public async Task<string> HandleAsync(DockerCommandArgs args, CancellationToken ct)
     {
@@ -55,11 +65,15 @@ public sealed class DockerRestartContainerActionHandler(IDockerCliService docker
     }
 }
 
-public sealed class DockerRemoveContainerActionHandler(IDockerCliService dockerCli) : IActionHandler<DockerCommandArgs>
+public sealed class DockerRemoveContainerActionHandler(IDockerCliService dockerCli, IOptions<DockerOptions> options) : IActionHandler<DockerCommandArgs>
 {
     public string ActionName => "docker_remove_container";
 
-    public string? Validate(DockerCommandArgs args) => string.IsNullOrWhiteSpace(args.ContainerId) ? "Missing ContainerId" : null;
+    public string? Validate(DockerCommandArgs args)
+    {
+        if (!options.Value.AllowDestructiveOperations) return "Destructive operations are disabled by safety switch.";
+        return string.IsNullOrWhiteSpace(args.ContainerId) ? "Missing ContainerId" : null;
+    }
 
     public async Task<string> HandleAsync(DockerCommandArgs args, CancellationToken ct)
     {

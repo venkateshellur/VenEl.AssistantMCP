@@ -10,6 +10,8 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
 using A = DocumentFormat.OpenXml.Drawing;
 using VenEl.MCPAssistant.Core.Dispatcher;
+using VenEl.MCPAssistant.LocalOffice.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace VenEl.MCPAssistant.LocalOffice.Tools;
 
@@ -57,12 +59,13 @@ public sealed class LocalReadPowerPointTextActionHandler : IActionHandler<LocalO
     }
 }
 
-public sealed class LocalCreatePowerPointPresentationActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalCreatePowerPointPresentationActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_create_powerpoint_presentation";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileOverwrite) return "File modification is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
         return null;
     }
@@ -135,12 +138,13 @@ public sealed class LocalCreatePowerPointPresentationActionHandler : IActionHand
     }
 }
 
-public sealed class LocalAddPowerPointSlideActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalAddPowerPointSlideActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_add_powerpoint_slide";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileOverwrite) return "File modification is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
         if (!File.Exists(args.FilePath)) return $"File not found: {args.FilePath}";
         return null;
@@ -259,12 +263,13 @@ public sealed class LocalAddPowerPointSlideActionHandler : IActionHandler<LocalO
     }
 }
 
-public sealed class LocalReplacePowerPointPlaceholderActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalReplacePowerPointPlaceholderActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_replace_powerpoint_placeholder";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileOverwrite) return "File modification is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
         if (!File.Exists(args.FilePath)) return $"File not found: {args.FilePath}";
         if (string.IsNullOrWhiteSpace(args.JsonData)) return "Missing JsonData";

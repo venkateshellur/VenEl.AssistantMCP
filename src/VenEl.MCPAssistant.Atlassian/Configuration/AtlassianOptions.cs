@@ -32,4 +32,6 @@ public sealed class AtlassianOptions
 
     /// <summary>OAuth 2.0 Client Credentials.</summary>
     public OAuthOptions OAuth { get; set; } = new();
+
+    public bool AllowDestructiveActions { get; set; } = false;
 }

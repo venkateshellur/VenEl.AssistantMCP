@@ -6,15 +6,18 @@ using System.Threading;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 using VenEl.MCPAssistant.Core.Dispatcher;
+using VenEl.MCPAssistant.LocalOffice.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace VenEl.MCPAssistant.LocalOffice.Tools;
 
-public sealed class LocalWriteExcelTableActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalWriteExcelTableActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_write_excel_table";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileOverwrite) return "File modification is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
         if (string.IsNullOrWhiteSpace(args.JsonData)) return "Missing JsonData";
         return null;
@@ -205,12 +208,13 @@ public sealed class LocalListExcelSheetsActionHandler : IActionHandler<LocalOffi
     }
 }
 
-public sealed class LocalCreateExcelSheetActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalCreateExcelSheetActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_create_excel_sheet";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileOverwrite) return "File modification is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
         if (string.IsNullOrWhiteSpace(args.NewSheetName)) return "Missing NewSheetName";
         return null;
@@ -232,12 +236,13 @@ public sealed class LocalCreateExcelSheetActionHandler : IActionHandler<LocalOff
     }
 }
 
-public sealed class LocalClearExcelSheetActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalClearExcelSheetActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_clear_excel_sheet";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileDeletion) return "File deletion/clearing is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
         if (!File.Exists(args.FilePath)) return $"File not found: {args.FilePath}";
         return null;
@@ -263,12 +268,13 @@ public sealed class LocalClearExcelSheetActionHandler : IActionHandler<LocalOffi
     }
 }
 
-public sealed class LocalDeleteExcelSheetActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalDeleteExcelSheetActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_delete_excel_sheet";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileDeletion) return "File deletion is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
         if (!File.Exists(args.FilePath)) return $"File not found: {args.FilePath}";
         if (string.IsNullOrWhiteSpace(args.SheetName)) return "Missing SheetName";

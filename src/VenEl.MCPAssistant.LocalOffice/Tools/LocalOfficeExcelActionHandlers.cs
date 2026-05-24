@@ -4,6 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 using VenEl.MCPAssistant.Core.Dispatcher;
+using VenEl.MCPAssistant.LocalOffice.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace VenEl.MCPAssistant.LocalOffice.Tools;
 
@@ -38,12 +40,13 @@ public sealed class LocalReadExcelCellActionHandler : IActionHandler<LocalOffice
     }
 }
 
-public sealed class LocalWriteExcelCellActionHandler : IActionHandler<LocalOfficeCommandArgs>
+public sealed class LocalWriteExcelCellActionHandler(IOptions<LocalOfficeOptions> options) : IActionHandler<LocalOfficeCommandArgs>
 {
     public string ActionName => "local_write_excel_cell";
 
     public string? Validate(LocalOfficeCommandArgs args)
     {
+        if (!options.Value.AllowFileOverwrite) return "File modification is disabled by safety switch.";
         if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing FilePath";
         if (string.IsNullOrWhiteSpace(args.CellAddress)) return "Missing CellAddress";
         if (args.Value == null) return "Missing Value";
