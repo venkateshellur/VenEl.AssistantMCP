@@ -1,0 +1,33 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using VenEl.AssistantMCP.Core.Registration;
+using VenEl.AssistantMCP.GitHub.Configuration;
+using VenEl.AssistantMCP.GitHub.Services;
+using VenEl.AssistantMCP.GitHub.Tools;
+
+namespace VenEl.AssistantMCP.GitHub.Extensions;
+
+public static class GitHubServiceExtensions
+{
+    public static IServiceCollection AddGitHubFeature(this IServiceCollection services, IConfiguration config)
+    {
+        services.Configure<GitHubOptions>(config.GetSection("GitHub"));
+
+        // Register Session State
+        services.AddSingleton<GitHubSession>();
+
+        // Register HTTP Client for GitHub
+        services.AddHttpClient<IGitHubHttpClient, GitHubHttpClient>();
+
+        // ── Self-register MCP tools into the shared registry ──────────────────
+        services.GetOrAddFeatureRegistry().Register(
+            featureName: "GitHub",
+            description: "GitHub tools: projects, repositories, pull requests, diffs, and session credential setup.",
+            toolRegistration: mcpBuilder => mcpBuilder.WithTools<GitHubDispatcherTool>());
+
+        // Automatically discover and register all IActionHandler<GitHubCommandArgs> implementations
+        services.AddActionHandlersFromAssembly<GitHubCommandArgs>(typeof(GitHubServiceExtensions).Assembly);
+
+        return services;
+    }
+}

@@ -2,32 +2,32 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy all project files to cache restore
-COPY ["src/VenEl.MCPAssistant.Server/VenEl.MCPAssistant.Server.csproj", "src/VenEl.MCPAssistant.Server/"]
-COPY ["src/VenEl.MCPAssistant.Core/VenEl.MCPAssistant.Core.csproj", "src/VenEl.MCPAssistant.Core/"]
-COPY ["src/VenEl.MCPAssistant.Azure/VenEl.MCPAssistant.Azure.csproj", "src/VenEl.MCPAssistant.Azure/"]
-COPY ["src/VenEl.MCPAssistant.Logging/VenEl.MCPAssistant.Logging.csproj", "src/VenEl.MCPAssistant.Logging/"]
-COPY ["src/VenEl.MCPAssistant.Docker/VenEl.MCPAssistant.Docker.csproj", "src/VenEl.MCPAssistant.Docker/"]
-COPY ["src/VenEl.MCPAssistant.GitHub/VenEl.MCPAssistant.GitHub.csproj", "src/VenEl.MCPAssistant.GitHub/"]
-COPY ["src/VenEl.MCPAssistant.MSSql/VenEl.MCPAssistant.MSSql.csproj", "src/VenEl.MCPAssistant.MSSql/"]
-COPY ["src/VenEl.MCPAssistant.Atlassian/VenEl.MCPAssistant.Atlassian.csproj", "src/VenEl.MCPAssistant.Atlassian/"]
-COPY ["src/VenEl.MCPAssistant.LocalOffice/VenEl.MCPAssistant.LocalOffice.csproj", "src/VenEl.MCPAssistant.LocalOffice/"]
-COPY ["src/VenEl.MCPAssistant.Slack/VenEl.MCPAssistant.Slack.csproj", "src/VenEl.MCPAssistant.Slack/"]
-COPY ["src/VenEl.MCPAssistant.Kubernetes/VenEl.MCPAssistant.Kubernetes.csproj", "src/VenEl.MCPAssistant.Kubernetes/"]
-COPY ["src/VenEl.MCPAssistant.AWS/VenEl.MCPAssistant.AWS.csproj", "src/VenEl.MCPAssistant.AWS/"]
-COPY ["src/VenEl.MCPAssistant.GCP/VenEl.MCPAssistant.GCP.csproj", "src/VenEl.MCPAssistant.GCP/"]
-COPY ["src/VenEl.MCPAssistant.Databricks/VenEl.MCPAssistant.Databricks.csproj", "src/VenEl.MCPAssistant.Databricks/"]
-COPY ["src/VenEl.MCPAssistant.Bitwarden/VenEl.MCPAssistant.Bitwarden.csproj", "src/VenEl.MCPAssistant.Bitwarden/"]
+COPY ["src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.csproj", "src/VenEl.AssistantMCP.Server/"]
+COPY ["src/VenEl.AssistantMCP.Core/VenEl.AssistantMCP.Core.csproj", "src/VenEl.AssistantMCP.Core/"]
+COPY ["src/VenEl.AssistantMCP.Azure/VenEl.AssistantMCP.Azure.csproj", "src/VenEl.AssistantMCP.Azure/"]
+COPY ["src/VenEl.AssistantMCP.Logging/VenEl.AssistantMCP.Logging.csproj", "src/VenEl.AssistantMCP.Logging/"]
+COPY ["src/VenEl.AssistantMCP.Docker/VenEl.AssistantMCP.Docker.csproj", "src/VenEl.AssistantMCP.Docker/"]
+COPY ["src/VenEl.AssistantMCP.GitHub/VenEl.AssistantMCP.GitHub.csproj", "src/VenEl.AssistantMCP.GitHub/"]
+COPY ["src/VenEl.AssistantMCP.MSSql/VenEl.AssistantMCP.MSSql.csproj", "src/VenEl.AssistantMCP.MSSql/"]
+COPY ["src/VenEl.AssistantMCP.Atlassian/VenEl.AssistantMCP.Atlassian.csproj", "src/VenEl.AssistantMCP.Atlassian/"]
+COPY ["src/VenEl.AssistantMCP.LocalOffice/VenEl.AssistantMCP.LocalOffice.csproj", "src/VenEl.AssistantMCP.LocalOffice/"]
+COPY ["src/VenEl.AssistantMCP.Slack/VenEl.AssistantMCP.Slack.csproj", "src/VenEl.AssistantMCP.Slack/"]
+COPY ["src/VenEl.AssistantMCP.Kubernetes/VenEl.AssistantMCP.Kubernetes.csproj", "src/VenEl.AssistantMCP.Kubernetes/"]
+COPY ["src/VenEl.AssistantMCP.AWS/VenEl.AssistantMCP.AWS.csproj", "src/VenEl.AssistantMCP.AWS/"]
+COPY ["src/VenEl.AssistantMCP.GCP/VenEl.AssistantMCP.GCP.csproj", "src/VenEl.AssistantMCP.GCP/"]
+COPY ["src/VenEl.AssistantMCP.Databricks/VenEl.AssistantMCP.Databricks.csproj", "src/VenEl.AssistantMCP.Databricks/"]
+COPY ["src/VenEl.AssistantMCP.Bitwarden/VenEl.AssistantMCP.Bitwarden.csproj", "src/VenEl.AssistantMCP.Bitwarden/"]
 
-RUN dotnet restore "src/VenEl.MCPAssistant.Server/VenEl.MCPAssistant.Server.csproj"
+RUN dotnet restore "src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.csproj"
 
 # Copy full source and publish
 COPY . .
-WORKDIR "/src/src/VenEl.MCPAssistant.Server"
-RUN dotnet publish "VenEl.MCPAssistant.Server.csproj" -c Release -o /app/publish /p:UseAppHost=false
+WORKDIR "/src/src/VenEl.AssistantMCP.Server"
+RUN dotnet publish "VenEl.AssistantMCP.Server.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 
 # The MCP server communicates over stdio
-ENTRYPOINT ["dotnet", "VenEl.MCPAssistant.Server.dll"]
+ENTRYPOINT ["dotnet", "VenEl.AssistantMCP.Server.dll"]
