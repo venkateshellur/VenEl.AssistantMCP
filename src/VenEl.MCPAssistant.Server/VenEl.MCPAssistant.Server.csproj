@@ -5,6 +5,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>venel-mcp</ToolCommandName>
+    <PackageId>VenEl.MCPAssistant</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Venkatesh Ellur</Authors>
+    <Description>MCP Server Assistant for interacting with various platforms via Anthropic / Claude Desktop.</Description>
+    <RepositoryUrl>https://github.com/venkateshellur/VenEl.MCPAssistant</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
