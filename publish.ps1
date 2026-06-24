@@ -52,7 +52,7 @@ if (Test-Path $AppsettingsDest) {
 }
 
 Write-Host "Publishing to: $PublishDir" -ForegroundColor Cyan
-dotnet publish $ServerCsproj -c Release -o $PublishDir --no-self-contained
+dotnet publish $ServerCsproj -c Release -o $PublishDir --self-contained true
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Publish failed (exit code $LASTEXITCODE)."
     exit $LASTEXITCODE
