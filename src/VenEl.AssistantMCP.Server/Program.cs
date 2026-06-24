@@ -17,6 +17,7 @@ using VenEl.AssistantMCP.AWS.Extensions;
 using VenEl.AssistantMCP.GCP.Extensions;
 using VenEl.AssistantMCP.Databricks.Extensions;
 using VenEl.AssistantMCP.Bitwarden.Extensions;
+using VenEl.AssistantMCP.MicrosoftTeams.Extensions;
 // ─────────────────────────────────────────────────────────────────────────────
 // VenEl MCP Assistant – STDIO MCP Server
 //
@@ -62,6 +63,7 @@ builder.Services.AddAwsFeature(builder.Configuration);
 builder.Services.AddGcpFeature(builder.Configuration);
 builder.Services.AddDatabricksFeature(builder.Configuration);
 builder.Services.AddBitwardenFeature(builder.Configuration);
+builder.Services.AddTeamsMcp(builder.Configuration.GetSection("Teams"));
 // Add future features below — one line each, fully independent:
 // builder.Services.AddAzureFeature(builder.Configuration);
 // builder.Services.AddAwsFeature(builder.Configuration);

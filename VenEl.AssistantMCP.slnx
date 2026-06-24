@@ -4,6 +4,7 @@
     <Project Path="src/VenEl.AssistantMCP.Bitwarden/VenEl.AssistantMCP.Bitwarden.csproj" />
     <Project Path="src/VenEl.AssistantMCP.Core/VenEl.AssistantMCP.Core.csproj" />
     <Project Path="src/VenEl.AssistantMCP.LocalOffice/VenEl.AssistantMCP.LocalOffice.csproj" />
+    <Project Path="src/VenEl.AssistantMCP.MicrosoftTeams/VenEl.AssistantMCP.MicrosoftTeams.csproj" />
     <Project Path="src/VenEl.AssistantMCP.MSSql/VenEl.AssistantMCP.MSSql.csproj" />
     <Project Path="src/VenEl.AssistantMCP.Atlassian/VenEl.AssistantMCP.Atlassian.csproj" />
     <Project Path="src/VenEl.AssistantMCP.Databricks/VenEl.AssistantMCP.Databricks.csproj" />

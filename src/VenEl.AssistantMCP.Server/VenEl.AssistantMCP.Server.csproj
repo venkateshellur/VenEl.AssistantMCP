@@ -35,6 +35,7 @@
     <ProjectReference Include="..\VenEl.AssistantMCP.GCP\VenEl.AssistantMCP.GCP.csproj" />
     <ProjectReference Include="..\VenEl.AssistantMCP.Databricks\VenEl.AssistantMCP.Databricks.csproj" />
     <ProjectReference Include="..\VenEl.AssistantMCP.Bitwarden\VenEl.AssistantMCP.Bitwarden.csproj" />
+    <ProjectReference Include="..\VenEl.AssistantMCP.MicrosoftTeams\VenEl.AssistantMCP.MicrosoftTeams.csproj" />
   </ItemGroup>
 
   <ItemGroup>
