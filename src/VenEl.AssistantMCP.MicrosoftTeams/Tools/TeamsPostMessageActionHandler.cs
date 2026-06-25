@@ -38,6 +38,11 @@ public sealed class TeamsPostMessageActionHandler : IActionHandler<TeamsCommandA
             var credential = new ClientSecretCredential(opt.TenantId, opt.ClientId, opt.ClientSecret);
             _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
         }
+        else if (opt.UseDefaultCredentials)
+        {
+            var credential = new DefaultAzureCredential();
+            _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
+        }
     }
 
     public string ActionName => "teams_post_message";
