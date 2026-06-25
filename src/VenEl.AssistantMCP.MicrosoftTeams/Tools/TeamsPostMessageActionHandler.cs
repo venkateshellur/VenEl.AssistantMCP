@@ -38,6 +38,31 @@ public sealed class TeamsPostMessageActionHandler : IActionHandler<TeamsCommandA
             var credential = new ClientSecretCredential(opt.TenantId, opt.ClientId, opt.ClientSecret);
             _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
         }
+        else if (opt.UseInteractiveBrowserAuth && !string.IsNullOrWhiteSpace(opt.ClientId))
+        {
+            var interactiveOptions = new InteractiveBrowserCredentialOptions
+            {
+                TenantId = opt.TenantId,
+                ClientId = opt.ClientId
+            };
+            var credential = new InteractiveBrowserCredential(interactiveOptions);
+            _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
+        }
+        else if (opt.UseDeviceCodeAuth && !string.IsNullOrWhiteSpace(opt.ClientId))
+        {
+            var deviceCodeOptions = new DeviceCodeCredentialOptions
+            {
+                TenantId = opt.TenantId,
+                ClientId = opt.ClientId,
+                DeviceCodeCallback = (code, cancellation) =>
+                {
+                    _logger.LogWarning(code.Message);
+                    return Task.FromResult(0);
+                }
+            };
+            var credential = new DeviceCodeCredential(deviceCodeOptions);
+            _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
+        }
         else if (opt.UseDefaultCredentials)
         {
             var credential = new DefaultAzureCredential();
