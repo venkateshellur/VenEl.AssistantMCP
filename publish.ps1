@@ -10,21 +10,23 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$IsWindows = $env:OS -eq "Windows_NT"
+
 $SolutionRoot   = $PSScriptRoot
-$ServerCsproj   = Join-Path $SolutionRoot "src" "VenEl.MCPAssistant.Server" "VenEl.MCPAssistant.Server.csproj"
+$ServerCsproj   = Join-Path $SolutionRoot "src\VenEl.AssistantMCP.Server\VenEl.AssistantMCP.Server.csproj"
 
 if ($IsWindows) {
     $PublishDir        = "C:\Venky\MCPs\VenEl.MCPAssistant"
-    $ServerExe         = Join-Path $PublishDir "VenEl.MCPAssistant.Server.exe"
-    $AntigravityConfig = Join-Path $env:USERPROFILE ".gemini" "antigravity" "mcp-config.json"
+    $ServerExe         = Join-Path $PublishDir "VenEl.AssistantMCP.Server.exe"
+    $AntigravityConfig = Join-Path $env:USERPROFILE ".gemini\antigravity\mcp-config.json"
     $McpCommand        = $ServerExe.Replace('\', '\\')
     $McpArgs           = "[]"
 } else {
     $PublishDir        = Join-Path $SolutionRoot "publish"
-    $ServerExe         = Join-Path $PublishDir "VenEl.MCPAssistant.Server"
-    $AntigravityConfig = Join-Path $HOME ".gemini" "antigravity" "mcp-config.json"
+    $ServerExe         = Join-Path $PublishDir "VenEl.AssistantMCP.Server"
+    $AntigravityConfig = Join-Path $HOME ".gemini\antigravity\mcp-config.json"
     $McpCommand        = "dotnet"
-    $DllPath           = Join-Path $PublishDir "VenEl.MCPAssistant.Server.dll"
+    $DllPath           = Join-Path $PublishDir "VenEl.AssistantMCP.Server.dll"
     $McpArgs           = '["' + $DllPath.Replace('\', '\\') + '"]'
 }
 
@@ -33,10 +35,10 @@ $ProjectConfig     = Join-Path $SolutionRoot "mcp_config.json"
 # ── Step 1: Stop the running server ──────────────────────────────────────────
 Write-Host "Stopping any running MCP server instances..." -ForegroundColor Cyan
 if ($IsWindows) {
-    Stop-Process -Name "VenEl.MCPAssistant.Server" -Force -ErrorAction SilentlyContinue
+    Stop-Process -Name "VenEl.AssistantMCP.Server" -Force -ErrorAction SilentlyContinue
 } else {
     # Simple kill for Mac/Linux if running via dotnet
-    Get-Process | Where-Object { $_.ProcessName -eq "dotnet" -and $_.CommandLine -match "VenEl.MCPAssistant.Server.dll" } | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process | Where-Object { $_.ProcessName -eq "dotnet" -and $_.CommandLine -match "VenEl.AssistantMCP.Server.dll" } | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 Start-Sleep -Milliseconds 500
 

@@ -8,3 +8,11 @@
     }
   }
 }
+{
+  "mcpServers": {
+    "venel": {
+      "command": "C:\\Venky\\MCPs\\VenEl.MCPAssistant\\VenEl.AssistantMCP.Server.exe",
+      "args": []
+    }
+  }
+}
