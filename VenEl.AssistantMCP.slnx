@@ -15,6 +15,7 @@
     <Project Path="src/VenEl.AssistantMCP.Slack/VenEl.AssistantMCP.Slack.csproj" />
     <Project Path="src/VenEl.AssistantMCP.GCP/VenEl.AssistantMCP.GCP.csproj" />
     <Project Path="src/VenEl.AssistantMCP.AWS/VenEl.AssistantMCP.AWS.csproj" />
+    <Project Path="src/VenEl.AssistantMCP.Email/VenEl.AssistantMCP.Email.csproj" />
     <Project Path="src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">
