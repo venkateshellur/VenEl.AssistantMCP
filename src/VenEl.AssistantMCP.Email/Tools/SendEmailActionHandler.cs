@@ -28,15 +28,41 @@ public class SendEmailActionHandler : IActionHandler<EmailCommandArgs>
         if (string.IsNullOrWhiteSpace(args.To)) return "Missing 'to' address.";
         if (string.IsNullOrWhiteSpace(args.Subject)) return "Missing 'subject'.";
         if (string.IsNullOrWhiteSpace(args.Body)) return "Missing 'body'.";
-        
-        if (string.IsNullOrWhiteSpace(_options.SmtpServer)) return "SMTP Server is not configured.";
-        if (string.IsNullOrWhiteSpace(_options.DefaultFromAddress)) return "Default From Address is not configured.";
-
         return null;
     }
 
     public async Task<string> HandleAsync(EmailCommandArgs args, CancellationToken ct)
     {
+        var provider = _options.Provider;
+        if (provider == EmailProviderType.Auto)
+        {
+            if (OperatingSystem.IsWindows())
+                provider = EmailProviderType.Outlook;
+            else
+                provider = EmailProviderType.Graph;
+        }
+
+        switch (provider)
+        {
+            case EmailProviderType.Outlook:
+                if (OperatingSystem.IsWindows())
+                {
+                    return await SendViaOutlookAsync(args, ct);
+                }
+                return "Outlook COM Interop is only supported on Windows.";
+            case EmailProviderType.Graph:
+                return await SendViaGraphApiAsync(args, ct);
+            case EmailProviderType.Smtp:
+            default:
+                return await SendViaSmtpAsync(args, ct);
+        }
+    }
+
+    private async Task<string> SendViaSmtpAsync(EmailCommandArgs args, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(_options.SmtpServer)) return "SMTP Server is not configured.";
+        if (string.IsNullOrWhiteSpace(_options.DefaultFromAddress)) return "Default From Address is not configured.";
+
         try
         {
             return await SendViaMailKitAsync(args, ct);
@@ -53,6 +79,83 @@ public class SendEmailActionHandler : IActionHandler<EmailCommandArgs>
                 _logger.LogError(fallbackEx, "System.Net.Mail fallback also failed.");
                 return $"Failed to send email. MailKit error: {ex.Message} | Fallback error: {fallbackEx.Message}";
             }
+        }
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private Task<string> SendViaOutlookAsync(EmailCommandArgs args, CancellationToken ct)
+    {
+        try
+        {
+            Type? outlookType = Type.GetTypeFromProgID("Outlook.Application");
+            if (outlookType == null) return Task.FromResult("Outlook is not installed on this machine.");
+            
+            dynamic outlookApp = Activator.CreateInstance(outlookType)!;
+            dynamic mailItem = outlookApp.CreateItem(0); // 0 = olMailItem
+            mailItem.To = args.To;
+            mailItem.Subject = args.Subject;
+            
+            if (args.IsHtml)
+                mailItem.HTMLBody = args.Body;
+            else
+                mailItem.Body = args.Body;
+            
+            mailItem.Send();
+            return Task.FromResult($"Email sent successfully to {args.To} (via Outlook COM Interop).");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Outlook COM Interop failed.");
+            return Task.FromResult($"Failed to send via Outlook: {ex.Message}");
+        }
+    }
+
+    private async Task<string> SendViaGraphApiAsync(EmailCommandArgs args, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(_options.GraphApiToken))
+        {
+            return "Graph API Token is not configured in Email settings.";
+        }
+
+        try
+        {
+            var payload = new
+            {
+                message = new
+                {
+                    subject = args.Subject,
+                    body = new
+                    {
+                        contentType = args.IsHtml ? "HTML" : "Text",
+                        content = args.Body
+                    },
+                    toRecipients = new[]
+                    {
+                        new { emailAddress = new { address = args.To } }
+                    }
+                },
+                saveToSentItems = "true"
+            };
+
+            using var httpClient = new System.Net.Http.HttpClient();
+            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.GraphApiToken);
+            
+            var content = new System.Net.Http.StringContent(System.Text.Json.JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+            
+            var response = await httpClient.PostAsync("https://graph.microsoft.com/v1.0/me/sendMail", content, ct);
+            if (response.IsSuccessStatusCode)
+            {
+                return $"Email sent successfully to {args.To} (via Microsoft Graph API).";
+            }
+            
+            var errorResponse = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogError("Graph API failed: {StatusCode} {Error}", response.StatusCode, errorResponse);
+            return $"Failed to send via Graph API. Status: {response.StatusCode}. Details: {errorResponse}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Microsoft Graph API failed.");
+            return $"Failed to send via Graph API: {ex.Message}";
         }
     }
 
