@@ -1,11 +1,13 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using VenEl.AssistantMCP.Atlassian.Services;
+using VenEl.AssistantMCP.Core.Configuration;
 using VenEl.AssistantMCP.Core.Dispatcher;
 
 namespace VenEl.AssistantMCP.Atlassian.Tools;
 
-public sealed class AtlassianConfigureActionHandler(AtlassianSessionCredentials session) : IActionHandler<AtlassianCommandArgs>
+public sealed class AtlassianConfigureActionHandler(AtlassianSessionCredentials session, AppSettingsUpdater appSettingsUpdater) : IActionHandler<AtlassianCommandArgs>
 {
     public string ActionName => "atlassian_configure";
 
@@ -30,7 +32,21 @@ public sealed class AtlassianConfigureActionHandler(AtlassianSessionCredentials 
             ? $" Bitbucket workspace set to '{session.BitbucketWorkspace}'."
             : " Note: Bitbucket workspace not set — call atlassian_configure again with BitbucketWorkspace if needed.";
 
-        return Task.FromResult($"✅ Atlassian session credentials configured for domain '{session.Domain}'." +
+        var configValues = new Dictionary<string, object?>
+        {
+            { "Domain", session.Domain },
+            { "Email", session.Email },
+            { "ApiToken", session.ApiToken }
+        };
+
+        if (session.BitbucketWorkspace is not null)
+        {
+            configValues["BitbucketWorkspace"] = session.BitbucketWorkspace;
+        }
+
+        appSettingsUpdater.UpdateSection("Atlassian", configValues);
+
+        return Task.FromResult($"✅ Atlassian session credentials configured for domain '{session.Domain}' and saved to appsettings.json." +
                workspaceNote +
                " You can now use jira_*, confluence_*, and bitbucket_* tools.");
     }

@@ -1,11 +1,13 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using VenEl.AssistantMCP.Azure.Services;
+using VenEl.AssistantMCP.Core.Configuration;
 using VenEl.AssistantMCP.Core.Dispatcher;
 
 namespace VenEl.AssistantMCP.Azure.Tools;
 
-public sealed class AzureConfigureActionHandler(AzureSessionCredentials session) : IActionHandler<AzureCommandArgs>
+public sealed class AzureConfigureActionHandler(AzureSessionCredentials session, AppSettingsUpdater appSettingsUpdater) : IActionHandler<AzureCommandArgs>
 {
     public string ActionName => "azure_configure";
 
@@ -21,7 +23,14 @@ public sealed class AzureConfigureActionHandler(AzureSessionCredentials session)
         session.OrganizationUrl = args.OrganizationUrl!.Trim().TrimEnd('/');
         session.PatToken = args.PatToken!.Trim();
 
-        return Task.FromResult($"✅ Azure session credentials configured for organization '{session.OrganizationUrl}'. You can now use azure commands.");
+        var configValues = new Dictionary<string, object?>
+        {
+            { "OrganizationUrl", session.OrganizationUrl },
+            { "PatToken", session.PatToken }
+        };
+        appSettingsUpdater.UpdateSection("Azure", configValues);
+
+        return Task.FromResult($"✅ Azure session credentials configured for organization '{session.OrganizationUrl}' and saved to appsettings.json. You can now use azure commands.");
     }
 }
 

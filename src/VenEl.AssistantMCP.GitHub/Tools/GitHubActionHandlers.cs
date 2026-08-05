@@ -1,12 +1,14 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using VenEl.AssistantMCP.Core.Configuration;
 using VenEl.AssistantMCP.Core.Dispatcher;
 using VenEl.AssistantMCP.GitHub.Services;
 
 namespace VenEl.AssistantMCP.GitHub.Tools;
 
-public sealed class GitHubConfigureActionHandler(GitHubSession session, ILogger<GitHubConfigureActionHandler> logger) : IActionHandler<GitHubCommandArgs>
+public sealed class GitHubConfigureActionHandler(GitHubSession session, ILogger<GitHubConfigureActionHandler> logger, AppSettingsUpdater appSettingsUpdater) : IActionHandler<GitHubCommandArgs>
 {
     public string ActionName => "github_configure";
 
@@ -19,8 +21,15 @@ public sealed class GitHubConfigureActionHandler(GitHubSession session, ILogger<
     public Task<string> HandleAsync(GitHubCommandArgs args, CancellationToken ct)
     {
         session.PatToken = args.PatToken;
-        logger.LogInformation("GitHub session configured successfully.");
-        return Task.FromResult("✅ GitHub session credentials configured successfully. You can now use the github_* tools.");
+        
+        var configValues = new Dictionary<string, object?>
+        {
+            { "PatToken", session.PatToken }
+        };
+        appSettingsUpdater.UpdateSection("GitHub", configValues);
+
+        logger.LogInformation("GitHub session configured successfully and saved to appsettings.json.");
+        return Task.FromResult("✅ GitHub session credentials configured successfully and saved to appsettings.json. You can now use the github_* tools.");
     }
 }
 
