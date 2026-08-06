@@ -7,8 +7,9 @@
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>venel-mcp</ToolCommandName>
+    <PackageOutputPath>./nupkg</PackageOutputPath>
+    <Version>1.2.5</Version>
     <PackageId>VenEl.AssistantMCP</PackageId>
-    <Version>1.2.4</Version>
     <Authors>Venkatesh Ellur</Authors>
     <Description>MCP Server Assistant for interacting with various platforms via Anthropic / Claude Desktop.</Description>
     <RepositoryUrl>https://github.com/venkateshellur/VenEl.AssistantMCP</RepositoryUrl>

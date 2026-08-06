@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using VenEl.AssistantMCP.Core.Updates;
 
 namespace VenEl.AssistantMCP.Core.Dispatcher;
 
@@ -64,7 +66,20 @@ public abstract class DispatcherToolBase<TArgs> where TArgs : class
         try
         {
             // Execute business logic
-            return await handler.HandleAsync(args, ct);
+            var result = await handler.HandleAsync(args, ct);
+            
+            // Piggyback update check
+            var updateChecker = _serviceProvider.GetService<IUpdateChecker>();
+            if (updateChecker != null)
+            {
+                var notification = await updateChecker.GetUpdateNotificationAsync(ct);
+                if (!string.IsNullOrWhiteSpace(notification))
+                {
+                    result += notification;
+                }
+            }
+            
+            return result;
         }
         catch (Exception ex)
         {
