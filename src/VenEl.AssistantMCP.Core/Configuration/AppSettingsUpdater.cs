@@ -12,7 +12,13 @@ public class AppSettingsUpdater
 
     public AppSettingsUpdater()
     {
-        _appSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var configDir = Path.Combine(userProfile, ".venel-mcp");
+        if (!Directory.Exists(configDir))
+        {
+            Directory.CreateDirectory(configDir);
+        }
+        _appSettingsPath = Path.Combine(configDir, "appsettings.json");
     }
 
     /// <summary>

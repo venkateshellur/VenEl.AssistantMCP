@@ -34,9 +34,14 @@ using VenEl.AssistantMCP.Email.Extensions;
 var builder = Host.CreateEmptyApplicationBuilder(settings: null);
 
 // ── Configuration ─────────────────────────────────────────────────────────────
+var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+var userConfigDir = Path.Combine(userProfile, ".venel-mcp");
+var userConfigPath = Path.Combine(userConfigDir, "appsettings.json");
+
 builder.Configuration
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+    .AddJsonFile(userConfigPath, optional: true, reloadOnChange: true)
     .AddEnvironmentVariables(prefix: "VENEL_");
 
 // ── Logging ───────────────────────────────────────────────────────────────────
