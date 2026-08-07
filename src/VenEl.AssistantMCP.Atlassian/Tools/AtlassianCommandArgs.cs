@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace VenEl.AssistantMCP.Atlassian.Tools;
@@ -27,6 +28,7 @@ public sealed class AtlassianCommandArgs
     [JsonPropertyName("projectKey")]
     public string? ProjectKey { get; set; }
 
+    [Description("The Jira Query Language (JQL) string. PRO TIP: To find issues assigned to the user in the active sprint, use exactly: `assignee = currentUser() AND sprint in openSprints()`")]
     [JsonPropertyName("jql")]
     public string? Jql { get; set; }
 
