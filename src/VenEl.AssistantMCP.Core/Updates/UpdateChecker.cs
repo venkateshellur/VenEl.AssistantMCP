@@ -9,9 +9,10 @@ namespace VenEl.AssistantMCP.Core.Updates;
 
 public sealed class UpdateChecker : IUpdateChecker
 {
-    private static bool _hasChecked;
+    private static DateTime _lastChecked = DateTime.MinValue;
     private static string? _updateNotification;
     private static readonly SemaphoreSlim _lock = new(1, 1);
+    private static readonly TimeSpan _checkInterval = TimeSpan.FromHours(1);
     
     private readonly HttpClient _httpClient;
 
@@ -22,12 +23,12 @@ public sealed class UpdateChecker : IUpdateChecker
 
     public async Task<string?> GetUpdateNotificationAsync(CancellationToken ct)
     {
-        if (_hasChecked) return _updateNotification;
+        if (DateTime.UtcNow - _lastChecked < _checkInterval) return _updateNotification;
 
         await _lock.WaitAsync(ct);
         try
         {
-            if (_hasChecked) return _updateNotification;
+            if (DateTime.UtcNow - _lastChecked < _checkInterval) return _updateNotification;
             
             try
             {
@@ -52,7 +53,7 @@ public sealed class UpdateChecker : IUpdateChecker
                 // Silently ignore network failures for updates so we don't break the tool call
             }
             
-            _hasChecked = true;
+            _lastChecked = DateTime.UtcNow;
             return _updateNotification;
         }
         finally
