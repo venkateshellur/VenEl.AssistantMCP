@@ -2,7 +2,9 @@ using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VenEl.AssistantMCP.Atlassian.Configuration;
 using VenEl.AssistantMCP.Atlassian.Services.Auth;
@@ -20,7 +22,8 @@ public sealed class AtlassianHttpClient(
     IOptions<AtlassianOptions> options,
     AtlassianSessionCredentials session,
     ApiTokenAuthProvider apiTokenProvider,
-    OAuthAuthProvider oauthProvider) : IAtlassianHttpClient
+    OAuthAuthProvider oauthProvider,
+    ILogger<AtlassianHttpClient> logger) : IAtlassianHttpClient
 {
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
     private static readonly ConcurrentDictionary<string, string> _jiraApiVersions = new(StringComparer.OrdinalIgnoreCase);
@@ -79,6 +82,35 @@ public sealed class AtlassianHttpClient(
         {
             var response = await httpClient.SendAsync(request, cancellationToken);
             var content  = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            // ── Auto-healing logic for 410 Gone ──────────────────────────────
+            if (response.StatusCode == System.Net.HttpStatusCode.Gone)
+            {
+                var match = Regex.Match(content, @"migrate to the (/[^\s]+) API");
+                if (match.Success)
+                {
+                    var newPath = match.Groups[1].Value;
+                    var oldUri = new Uri(url);
+                    var newUrl = $"https://{oldUri.Host}{newPath}{oldUri.Query}";
+                    
+                    logger.LogWarning("Atlassian API deprecated endpoint used. Auto-healing by migrating from {OldUrl} to {NewUrl}", url, newUrl);
+
+                    using var retryRequest = new HttpRequestMessage(method, newUrl);
+                    retryRequest.Headers.Authorization = auth;
+                    retryRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                    
+                    if (body is not null)
+                        retryRequest.Content = JsonContent.Create(body);
+
+                    var retryResponse = await httpClient.SendAsync(retryRequest, cancellationToken);
+                    var retryContent = await retryResponse.Content.ReadAsStringAsync(cancellationToken);
+
+                    if (retryResponse.IsSuccessStatusCode)
+                        return PrettyPrint(retryContent);
+
+                    return $"[HTTP {(int)retryResponse.StatusCode} {retryResponse.ReasonPhrase}] {retryContent}";
+                }
+            }
 
             if (!response.IsSuccessStatusCode)
                 return $"[HTTP {(int)response.StatusCode} {response.ReasonPhrase}] {content}";
