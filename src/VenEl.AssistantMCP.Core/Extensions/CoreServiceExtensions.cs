@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using VenEl.AssistantMCP.Core.Security;
 using VenEl.AssistantMCP.Core.Configuration;
 using VenEl.AssistantMCP.Core.Updates;
+using VenEl.AssistantMCP.Core.Http;
 
 namespace VenEl.AssistantMCP.Core.Extensions;
 
@@ -12,6 +13,15 @@ public static class CoreServiceExtensions
         services.AddSingleton<SecretManager>();
         services.AddSingleton<AppSettingsUpdater>();
         services.AddHttpClient<IUpdateChecker, UpdateChecker>();
+        
+        services.AddMemoryCache();
+        services.AddTransient<CachingDelegatingHandler>();
+        
         return services;
+    }
+
+    public static IHttpClientBuilder AddMcpCaching(this IHttpClientBuilder builder)
+    {
+        return builder.AddHttpMessageHandler<CachingDelegatingHandler>();
     }
 }

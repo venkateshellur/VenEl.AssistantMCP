@@ -1,0 +1,7 @@
+<Project>
+  <!-- Automatically install Git Hooks on build -->
+  <Target Name="InstallGitHooks" BeforeTargets="Build" Condition="Exists('$(MSBuildThisFileDirectory).git')">
+    <Message Importance="High" Text="Installing Git Hooks for Jira enforcement..." />
+    <Exec Command="git config core.hooksPath .githooks" WorkingDirectory="$(MSBuildThisFileDirectory)" ContinueOnError="true" />
+  </Target>
+</Project>

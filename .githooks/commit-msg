@@ -1,0 +1,30 @@
+#!/bin/sh
+
+# Enforce Jira Story format: "KAN-1 : Change details"
+JIRA_REGEX="^KAN-[0-9]+[[:space:]]*:[[:space:]]*.+"
+
+commit_message_file="$1"
+commit_message=$(cat "$commit_message_file")
+
+# Allow merge commits to bypass
+if echo "$commit_message" | grep -q "^Merge branch"; then
+    exit 0
+fi
+
+if echo "$commit_message" | grep -Eq "$JIRA_REGEX"; then
+    exit 0
+else
+    echo ""
+    echo "=========================================================================="
+    echo "❌ COMMIT FAILED: Invalid Commit Message Format"
+    echo "=========================================================================="
+    echo "Your commit message must begin with a Jira story number from the KAN project."
+    echo "Expected format: KAN-<number> : <Change details>"
+    echo "For example:     KAN-1 : Added new feature"
+    echo ""
+    echo "Your commit message was:"
+    echo "--------------------------------------------------------------------------"
+    echo "$commit_message"
+    echo "--------------------------------------------------------------------------"
+    exit 1
+fi

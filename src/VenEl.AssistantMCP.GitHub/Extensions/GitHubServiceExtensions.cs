@@ -4,6 +4,7 @@ using VenEl.AssistantMCP.Core.Registration;
 using VenEl.AssistantMCP.GitHub.Configuration;
 using VenEl.AssistantMCP.GitHub.Services;
 using VenEl.AssistantMCP.GitHub.Tools;
+using VenEl.AssistantMCP.Core.Extensions;
 
 namespace VenEl.AssistantMCP.GitHub.Extensions;
 
@@ -17,7 +18,7 @@ public static class GitHubServiceExtensions
         services.AddSingleton<GitHubSession>();
 
         // Register HTTP Client for GitHub
-        services.AddHttpClient<IGitHubHttpClient, GitHubHttpClient>();
+        services.AddHttpClient<IGitHubHttpClient, GitHubHttpClient>().AddMcpCaching();
 
         // ── Self-register MCP tools into the shared registry ──────────────────
         services.GetOrAddFeatureRegistry().Register(

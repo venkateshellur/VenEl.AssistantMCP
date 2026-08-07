@@ -4,6 +4,7 @@ using VenEl.AssistantMCP.Atlassian.Configuration;
 using VenEl.AssistantMCP.Atlassian.Services;
 using VenEl.AssistantMCP.Atlassian.Services.Auth;
 using VenEl.AssistantMCP.Atlassian.Tools;
+using VenEl.AssistantMCP.Core.Extensions;
 using VenEl.AssistantMCP.Core.Registration;
 
 namespace VenEl.AssistantMCP.Atlassian.Extensions;
@@ -40,7 +41,7 @@ public static class AtlassianServiceExtensions
         services.AddSingleton<AtlassianSessionCredentials>();
 
         // ── HTTP client ───────────────────────────────────────────────────────
-        services.AddHttpClient<IAtlassianHttpClient, AtlassianHttpClient>();
+        services.AddHttpClient<IAtlassianHttpClient, AtlassianHttpClient>().AddMcpCaching();
 
         // ── Self-register MCP tools into the shared registry ──────────────────
         services.GetOrAddFeatureRegistry().Register(

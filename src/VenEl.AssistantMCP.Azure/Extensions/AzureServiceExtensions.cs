@@ -5,6 +5,7 @@ using VenEl.AssistantMCP.Azure.Services;
 using VenEl.AssistantMCP.Azure.Services.Auth;
 using VenEl.AssistantMCP.Azure.Tools;
 using VenEl.AssistantMCP.Core.Registration;
+using VenEl.AssistantMCP.Core.Extensions;
 
 namespace VenEl.AssistantMCP.Azure.Extensions;
 
@@ -28,7 +29,7 @@ public static class AzureServiceExtensions
         services.AddSingleton<AzureSessionCredentials>();
 
         // ── HTTP client ───────────────────────────────────────────────────────
-        services.AddHttpClient<IAzureHttpClient, AzureHttpClient>();
+        services.AddHttpClient<IAzureHttpClient, AzureHttpClient>().AddMcpCaching();
 
         // ── Action Handlers ───────────────────────────────────────────────────
         services.AddActionHandlersFromAssembly<AzureCommandArgs>(typeof(AzureServiceExtensions).Assembly);
