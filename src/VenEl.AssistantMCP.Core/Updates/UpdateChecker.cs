@@ -15,10 +15,12 @@ public sealed class UpdateChecker : IUpdateChecker
     private static readonly TimeSpan _checkInterval = TimeSpan.FromHours(1);
     
     private readonly HttpClient _httpClient;
+    private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
 
-    public UpdateChecker(HttpClient httpClient)
+    public UpdateChecker(HttpClient httpClient, Microsoft.Extensions.Configuration.IConfiguration config)
     {
         _httpClient = httpClient;
+        _config = config;
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "VenEl.AssistantMCP-UpdateChecker");
     }
 
@@ -33,8 +35,9 @@ public sealed class UpdateChecker : IUpdateChecker
             
             try
             {
-                var response = await _httpClient.GetFromJsonAsync<NugetIndex>(
-                    "https://api.nuget.org/v3-flatcontainer/venel.assistantmcp/index.json", ct);
+                var feedUrl = _config["Updates:FeedUrl"] ?? "https://api.nuget.org/v3-flatcontainer/venel.assistantmcp/index.json";
+                var response = await _httpClient.GetFromJsonAsync<NugetIndex>(feedUrl, ct);
+
                     
                 if (response?.Versions != null && response.Versions.Length > 0)
                 {
