@@ -72,10 +72,14 @@ public sealed class JiraSearchIssuesActionHandler(IAtlassianHttpClient client, I
         int maxResults = Math.Clamp(args.MaxResults ?? 25, 1, 100);
         int startAt = Math.Max(args.StartAt ?? 0, 0);
         logger.LogDebug("Searching Jira issues with JQL: {Jql}", args.Jql);
-        var encoded = Uri.EscapeDataString(args.Jql!);
-        return await client.GetAsync(AtlassianProduct.Jira,
-            $"search?jql={encoded}&maxResults={maxResults}&startAt={startAt}&fields=summary,status,assignee,priority,issuetype,created,updated,labels",
-            ct);
+        var payload = new
+        {
+            jql = args.Jql,
+            maxResults = maxResults,
+            startAt = startAt,
+            fields = new[] { "summary", "status", "assignee", "priority", "issuetype", "created", "updated", "labels" }
+        };
+        return await client.PostAsync(AtlassianProduct.Jira, "search/jql", payload, ct);
     }
 }
 

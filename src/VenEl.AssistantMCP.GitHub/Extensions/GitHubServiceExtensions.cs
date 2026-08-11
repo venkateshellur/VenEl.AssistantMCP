@@ -5,6 +5,8 @@ using VenEl.AssistantMCP.GitHub.Configuration;
 using VenEl.AssistantMCP.GitHub.Services;
 using VenEl.AssistantMCP.GitHub.Tools;
 using VenEl.AssistantMCP.Core.Extensions;
+using VenEl.AssistantMCP.Core.Proactive;
+using VenEl.AssistantMCP.GitHub.Proactive;
 
 namespace VenEl.AssistantMCP.GitHub.Extensions;
 
@@ -16,6 +18,7 @@ public static class GitHubServiceExtensions
 
         // Register Session State
         services.AddSingleton<GitHubSession>();
+        services.AddSingleton<IProactiveSource, GitHubProactiveSource>();
 
         // Register HTTP Client for GitHub
         services.AddHttpClient<IGitHubHttpClient, GitHubHttpClient>().AddMcpCaching();

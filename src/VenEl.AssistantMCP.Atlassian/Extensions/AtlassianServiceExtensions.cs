@@ -39,6 +39,7 @@ public static class AtlassianServiceExtensions
 
         // ── Session credentials (in-memory, conversation-supplied fallback) ────
         services.AddSingleton<AtlassianSessionCredentials>();
+        services.AddSingleton<VenEl.AssistantMCP.Core.Proactive.IProactiveSource, VenEl.AssistantMCP.Atlassian.Proactive.AtlassianProactiveSource>();
 
         // ── HTTP client ───────────────────────────────────────────────────────
         services.AddHttpClient<IAtlassianHttpClient, AtlassianHttpClient>().AddMcpCaching();

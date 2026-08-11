@@ -17,6 +17,10 @@ public static class CoreServiceExtensions
         services.AddMemoryCache();
         services.AddTransient<CachingDelegatingHandler>();
         
+        // Proactive Notifications
+        services.AddSingleton<VenEl.AssistantMCP.Core.Proactive.IAlertsManager, VenEl.AssistantMCP.Core.Proactive.AlertsManager>();
+        services.AddHostedService<VenEl.AssistantMCP.Core.Workers.ProactiveNotificationWorker>();
+        
         return services;
     }
 
