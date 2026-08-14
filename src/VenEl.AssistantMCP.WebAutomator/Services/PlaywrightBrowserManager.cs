@@ -61,7 +61,24 @@ public sealed class PlaywrightBrowserManager : IAsyncDisposable
                 _context = await _browser.NewContextAsync();
             }
 
-            _page = await _context!.NewPageAsync();
+            if (_page == null || _page.IsClosed)
+            {
+                _page = await _context!.NewPageAsync();
+                await _page.RouteAsync("**/*", async route =>
+                {
+                    if (route.Request.ResourceType == "image" ||
+                        route.Request.ResourceType == "stylesheet" ||
+                        route.Request.ResourceType == "font" ||
+                        route.Request.ResourceType == "media")
+                    {
+                        await route.AbortAsync();
+                    }
+                    else
+                    {
+                        await route.ContinueAsync();
+                    }
+                });
+            }
             return _page;
         }
         finally

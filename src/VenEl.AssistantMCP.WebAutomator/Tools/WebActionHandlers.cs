@@ -20,7 +20,7 @@ public sealed class WebNavigateActionHandler(PlaywrightBrowserManager browserMan
     {
         logger.LogInformation("Navigating to {Url}", args.Url);
         var page = await browserManager.GetOrCreatePageAsync();
-        await page.GotoAsync(args.Url!, new Microsoft.Playwright.PageGotoOptions { WaitUntil = Microsoft.Playwright.WaitUntilState.NetworkIdle });
+        await page.GotoAsync(args.Url!, new Microsoft.Playwright.PageGotoOptions { WaitUntil = Microsoft.Playwright.WaitUntilState.DOMContentLoaded });
         return await page.EvaluateAsync<string>("document.body.innerText");
     }
 }
