@@ -10,12 +10,14 @@ namespace VenEl.AssistantMCP.Core.Proactive;
 public class AlertsManager : IAlertsManager
 {
     private readonly ILogger<AlertsManager> _logger;
+    private readonly IServiceProvider _serviceProvider;
     private readonly List<string> _activeAlerts = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
 
-    public AlertsManager(ILogger<AlertsManager> logger)
+    public AlertsManager(ILogger<AlertsManager> logger, IServiceProvider serviceProvider)
     {
         _logger = logger;
+        _serviceProvider = serviceProvider;
     }
 
     public async Task PublishAlertsAsync(IEnumerable<string> alerts, CancellationToken ct)
@@ -27,8 +29,19 @@ public class AlertsManager : IAlertsManager
             _activeAlerts.AddRange(alerts);
             _logger.LogInformation($"Published {_activeAlerts.Count} new proactive alerts.");
             
-            // TODO: Trigger MCP resource updated notification for venel://system/latest-alerts
-            // This requires the underlying MCP server context to send a notifications/resources/updated event.
+            try
+            {
+                var mcpServer = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<ModelContextProtocol.Server.McpServer>(_serviceProvider);
+                if (mcpServer != null)
+                {
+                    await mcpServer.SendNotificationAsync("notifications/resources/updated", new { uri = "venel://system/latest-alerts" }, cancellationToken: ct);
+                    _logger.LogInformation("Sent notifications/resources/updated to connected MCP clients.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send proactive notification to MCP Server.");
+            }
         }
         finally
         {

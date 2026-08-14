@@ -5,9 +5,11 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
+using VenEl.AssistantMCP.Core.Proactive;
+
 namespace VenEl.AssistantMCP.Core.Updates;
 
-public sealed class UpdateChecker : IUpdateChecker
+public sealed class UpdateChecker : IUpdateChecker, IProactiveSource
 {
     private static DateTime _lastChecked = DateTime.MinValue;
     private static string? _updateNotification;
@@ -22,6 +24,12 @@ public sealed class UpdateChecker : IUpdateChecker
         _httpClient = httpClient;
         _config = config;
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "VenEl.AssistantMCP-UpdateChecker");
+    }
+
+    public async Task<string?> CheckForNewAlertsAsync(CancellationToken ct)
+    {
+        var notification = await GetUpdateNotificationAsync(ct);
+        return notification;
     }
 
     public async Task<string?> GetUpdateNotificationAsync(CancellationToken ct)
