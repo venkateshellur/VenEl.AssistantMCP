@@ -26,9 +26,9 @@ RUN dotnet restore "src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.cspr
 # Copy full source and publish
 COPY . .
 WORKDIR "/src/src/VenEl.AssistantMCP.Server"
-RUN dotnet publish "VenEl.AssistantMCP.Server.csproj" -c Release -f net10.0 -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "VenEl.AssistantMCP.Server.csproj" -c Release -f net8.0 -o /app/publish /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 
