@@ -8,7 +8,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>venel-mcp</ToolCommandName>
     <PackageOutputPath>./nupkg</PackageOutputPath>
-    <Version>1.2.15</Version>
+    <Version>1.3.0</Version>
     <PackageId>VenEl.AssistantMCP</PackageId>
     <Authors>Venkatesh Ellur</Authors>
     <Description>MCP Server Assistant for interacting with various platforms via Anthropic / Claude Desktop.</Description>
@@ -39,6 +39,7 @@
     <ProjectReference Include="..\VenEl.AssistantMCP.Bitwarden\VenEl.AssistantMCP.Bitwarden.csproj" />
     <ProjectReference Include="..\VenEl.AssistantMCP.MicrosoftTeams\VenEl.AssistantMCP.MicrosoftTeams.csproj" />
     <ProjectReference Include="..\VenEl.AssistantMCP.Email\VenEl.AssistantMCP.Email.csproj" />
+    <ProjectReference Include="..\VenEl.AssistantMCP.WebAutomator\VenEl.AssistantMCP.WebAutomator.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -8,6 +8,7 @@ using VenEl.AssistantMCP.Atlassian.Extensions;
 using VenEl.AssistantMCP.Azure.Extensions;
 using VenEl.AssistantMCP.GitHub.Extensions;
 using VenEl.AssistantMCP.MSSql.Extensions;
+using VenEl.AssistantMCP.WebAutomator.Extensions;
 using VenEl.AssistantMCP.Logging.Extensions;
 using VenEl.AssistantMCP.Docker.Extensions;
 using VenEl.AssistantMCP.LocalOffice.Extensions;
@@ -71,6 +72,7 @@ builder.Services.AddDatabricksFeature(builder.Configuration);
 builder.Services.AddBitwardenFeature(builder.Configuration);
 builder.Services.AddTeamsMcp(builder.Configuration.GetSection("Teams"));
 builder.Services.AddEmailFeature(builder.Configuration);
+builder.Services.AddWebAutomator();
 // Add future features below — one line each, fully independent:
 // builder.Services.AddAzureFeature(builder.Configuration);
 // builder.Services.AddAwsFeature(builder.Configuration);
