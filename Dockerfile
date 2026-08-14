@@ -17,6 +17,9 @@ COPY ["src/VenEl.AssistantMCP.AWS/VenEl.AssistantMCP.AWS.csproj", "src/VenEl.Ass
 COPY ["src/VenEl.AssistantMCP.GCP/VenEl.AssistantMCP.GCP.csproj", "src/VenEl.AssistantMCP.GCP/"]
 COPY ["src/VenEl.AssistantMCP.Databricks/VenEl.AssistantMCP.Databricks.csproj", "src/VenEl.AssistantMCP.Databricks/"]
 COPY ["src/VenEl.AssistantMCP.Bitwarden/VenEl.AssistantMCP.Bitwarden.csproj", "src/VenEl.AssistantMCP.Bitwarden/"]
+COPY ["src/VenEl.AssistantMCP.MicrosoftTeams/VenEl.AssistantMCP.MicrosoftTeams.csproj", "src/VenEl.AssistantMCP.MicrosoftTeams/"]
+COPY ["src/VenEl.AssistantMCP.Email/VenEl.AssistantMCP.Email.csproj", "src/VenEl.AssistantMCP.Email/"]
+COPY ["src/VenEl.AssistantMCP.WebAutomator/VenEl.AssistantMCP.WebAutomator.csproj", "src/VenEl.AssistantMCP.WebAutomator/"]
 
 RUN dotnet restore "src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.csproj"
 
