@@ -17,6 +17,7 @@ public interface IGitHubHttpClient
     Task<string> GetAsync(string path, CancellationToken cancellationToken = default, string? acceptHeader = null);
     Task<string> PostAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null);
     Task<string> PutAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null);
+    Task<string> PatchAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null);
 }
 
 public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession session, IOptions<GitHubOptions> options, SecretManager secretManager) : IGitHubHttpClient
@@ -32,6 +33,9 @@ public sealed class GitHubHttpClient(HttpClient httpClient, GitHubSession sessio
 
     public Task<string> PutAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null)
         => SendAsync(HttpMethod.Put, path, body, cancellationToken, acceptHeader);
+
+    public Task<string> PatchAsync(string path, object body, CancellationToken cancellationToken = default, string? acceptHeader = null)
+        => SendAsync(HttpMethod.Patch, path, body, cancellationToken, acceptHeader);
 
     private async Task<string> SendAsync(
         HttpMethod method,

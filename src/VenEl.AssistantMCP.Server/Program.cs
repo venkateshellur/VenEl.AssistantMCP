@@ -20,6 +20,7 @@ using VenEl.AssistantMCP.Databricks.Extensions;
 using VenEl.AssistantMCP.Bitwarden.Extensions;
 using VenEl.AssistantMCP.MicrosoftTeams.Extensions;
 using VenEl.AssistantMCP.Email.Extensions;
+using VenEl.AssistantMCP.Host.Extensions;
 // ─────────────────────────────────────────────────────────────────────────────
 // VenEl MCP Assistant – STDIO MCP Server
 //
@@ -73,6 +74,7 @@ builder.Services.AddBitwardenFeature(builder.Configuration);
 builder.Services.AddTeamsMcp(builder.Configuration.GetSection("Teams"));
 builder.Services.AddEmailFeature(builder.Configuration);
 builder.Services.AddWebAutomator();
+builder.Services.AddHostFeature(builder.Configuration);
 // Add future features below — one line each, fully independent:
 // builder.Services.AddAzureFeature(builder.Configuration);
 // builder.Services.AddAwsFeature(builder.Configuration);

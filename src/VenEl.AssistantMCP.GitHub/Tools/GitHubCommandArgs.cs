@@ -69,4 +69,10 @@ public sealed class GitHubCommandArgs
     /// </summary>
     [JsonPropertyName("ref")]
     public string? Ref { get; set; }
+
+    /// <summary>
+    /// The review event type. Options: APPROVE, REQUEST_CHANGES, COMMENT.
+    /// </summary>
+    [JsonPropertyName("reviewEvent")]
+    public string? ReviewEvent { get; set; }
 }

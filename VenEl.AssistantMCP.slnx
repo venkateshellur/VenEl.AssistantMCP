@@ -10,6 +10,7 @@
     <Project Path="src/VenEl.AssistantMCP.Databricks/VenEl.AssistantMCP.Databricks.csproj" />
     <Project Path="src/VenEl.AssistantMCP.Docker/VenEl.AssistantMCP.Docker.csproj" />
     <Project Path="src/VenEl.AssistantMCP.GitHub/VenEl.AssistantMCP.GitHub.csproj" />
+    <Project Path="src/VenEl.AssistantMCP.Host/VenEl.AssistantMCP.Host.csproj" />
     <Project Path="src/VenEl.AssistantMCP.Kubernetes/VenEl.AssistantMCP.Kubernetes.csproj" />
     <Project Path="src/VenEl.AssistantMCP.Logging/VenEl.AssistantMCP.Logging.csproj" />
     <Project Path="src/VenEl.AssistantMCP.Slack/VenEl.AssistantMCP.Slack.csproj" />
