@@ -41,11 +41,42 @@ public sealed class AtlassianCommandArgs
     [JsonPropertyName("transitionId")]
     public string? TransitionId { get; set; }
 
+    [JsonPropertyName("assigneeAccountId")]
+    public string? AssigneeAccountId { get; set; }
+
+    [JsonPropertyName("parentKey")]
+    public string? ParentKey { get; set; }
+
+    [JsonPropertyName("labels")]
+    public string[]? Labels { get; set; }
+
     [JsonPropertyName("maxResults")]
     public int? MaxResults { get; set; }
 
     [JsonPropertyName("startAt")]
     public int? StartAt { get; set; }
+
+    // ── Jira Extended Parameters ──
+    [JsonPropertyName("outwardIssueKey")]
+    public string? OutwardIssueKey { get; set; }
+
+    [JsonPropertyName("inwardIssueKey")]
+    public string? InwardIssueKey { get; set; }
+
+    [JsonPropertyName("linkType")]
+    public string? LinkType { get; set; }
+
+    [JsonPropertyName("timeSpent")]
+    public string? TimeSpent { get; set; }
+
+    [JsonPropertyName("query")]
+    public string? Query { get; set; }
+
+    [JsonPropertyName("filePath")]
+    public string? FilePath { get; set; }
+
+    [JsonPropertyName("rawFields")]
+    public System.Collections.Generic.Dictionary<string, object>? RawFields { get; set; }
 
     // ── Confluence Parameters ──
     [JsonPropertyName("pageId")]
@@ -68,6 +99,15 @@ public sealed class AtlassianCommandArgs
 
     [JsonPropertyName("limit")]
     public int? Limit { get; set; }
+
+    [JsonPropertyName("labelName")]
+    public string? LabelName { get; set; }
+
+    [JsonPropertyName("exportFormat")]
+    public string? ExportFormat { get; set; }
+
+    [JsonPropertyName("downloadPath")]
+    public string? DownloadPath { get; set; }
 
     // ── Bitbucket Parameters ──
     [JsonPropertyName("repoSlug")]

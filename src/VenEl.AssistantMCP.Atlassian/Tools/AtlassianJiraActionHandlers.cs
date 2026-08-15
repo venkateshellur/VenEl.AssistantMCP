@@ -109,6 +109,20 @@ public sealed class JiraCreateIssueActionHandler(IAtlassianHttpClient client, IL
             fields["description"] = JiraHelper.ToAdf(args.Description);
         if (args.Priority is not null)
             fields["priority"] = new { name = args.Priority };
+        if (args.ParentKey is not null)
+            fields["parent"] = new { key = args.ParentKey };
+        if (args.AssigneeAccountId is not null)
+            fields["assignee"] = new { accountId = args.AssigneeAccountId };
+        if (args.Labels is not null && args.Labels.Length > 0)
+            fields["labels"] = args.Labels;
+            
+        if (args.RawFields is not null)
+        {
+            foreach (var kvp in args.RawFields)
+            {
+                fields[kvp.Key] = kvp.Value;
+            }
+        }
 
         return await client.PostAsync(AtlassianProduct.Jira, "issue", new { fields }, ct);
     }
@@ -132,9 +146,20 @@ public sealed class JiraUpdateIssueActionHandler(IAtlassianHttpClient client, IL
         if (args.Summary is not null) fields["summary"] = args.Summary;
         if (args.Description is not null) fields["description"] = JiraHelper.ToAdf(args.Description);
         if (args.Priority is not null) fields["priority"] = new { name = args.Priority };
+        if (args.ParentKey is not null) fields["parent"] = new { key = args.ParentKey };
+        if (args.AssigneeAccountId is not null) fields["assignee"] = new { accountId = args.AssigneeAccountId };
+        if (args.Labels is not null && args.Labels.Length > 0) fields["labels"] = args.Labels;
+        
+        if (args.RawFields is not null)
+        {
+            foreach (var kvp in args.RawFields)
+            {
+                fields[kvp.Key] = kvp.Value;
+            }
+        }
 
         if (fields.Count == 0)
-            return "[ERROR] No fields provided to update. Specify at least one of: Summary, Description, Priority.";
+            return "[ERROR] No fields provided to update. Specify at least one of: Summary, Description, Priority, ParentKey, AssigneeAccountId, Labels, or RawFields.";
 
         return await client.PutAsync(AtlassianProduct.Jira, $"issue/{args.IssueKey}", new { fields }, ct);
     }
@@ -223,5 +248,155 @@ public sealed class JiraListSprintsActionHandler(IAtlassianHttpClient client, IL
         int maxResults = Math.Clamp(args.MaxResults ?? 50, 1, 100);
         logger.LogDebug("Listing Jira sprints for board {BoardId} (maxResults={Max})", args.BoardId, maxResults);
         return await client.GetAsync(AtlassianProduct.JiraAgile, $"board/{args.BoardId}/sprint?maxResults={maxResults}", ct);
+    }
+}
+
+public sealed class JiraMoveIssuesToSprintActionHandler(IAtlassianHttpClient client, ILogger<JiraMoveIssuesToSprintActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "jira_move_issues_to_sprint";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (args.SprintId == null) return "Missing required parameter 'SprintId'.";
+        if (string.IsNullOrWhiteSpace(args.IssueKey)) return "Missing required parameter 'IssueKey'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        logger.LogDebug("Moving issue {IssueKey} to sprint {SprintId}", args.IssueKey, args.SprintId);
+        // The API accepts an array of issue keys
+        var payload = new { issues = new[] { args.IssueKey } };
+        return await client.PostAsync(AtlassianProduct.JiraAgile, $"sprint/{args.SprintId}/issue", payload, ct);
+    }
+}
+
+public sealed class JiraGetSprintIssuesActionHandler(IAtlassianHttpClient client, ILogger<JiraGetSprintIssuesActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "jira_get_sprint_issues";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (args.SprintId == null) return "Missing required parameter 'SprintId'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        int maxResults = Math.Clamp(args.MaxResults ?? 50, 1, 100);
+        int startAt = Math.Max(args.StartAt ?? 0, 0);
+        logger.LogDebug("Getting issues for sprint {SprintId} (maxResults={Max})", args.SprintId, maxResults);
+        return await client.GetAsync(AtlassianProduct.JiraAgile, $"sprint/{args.SprintId}/issue?maxResults={maxResults}&startAt={startAt}", ct);
+    }
+}
+
+public sealed class JiraSearchUsersActionHandler(IAtlassianHttpClient client, ILogger<JiraSearchUsersActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "jira_search_users";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.Query)) return "Missing required parameter 'Query'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        int maxResults = Math.Clamp(args.MaxResults ?? 50, 1, 100);
+        logger.LogDebug("Searching for Jira users with query: {Query}", args.Query);
+        var uriQuery = Uri.EscapeDataString(args.Query!);
+        return await client.GetAsync(AtlassianProduct.Jira, $"user/search?query={uriQuery}&maxResults={maxResults}", ct);
+    }
+}
+
+public sealed class JiraLinkIssuesActionHandler(IAtlassianHttpClient client, ILogger<JiraLinkIssuesActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "jira_link_issues";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.OutwardIssueKey)) return "Missing required parameter 'OutwardIssueKey'.";
+        if (string.IsNullOrWhiteSpace(args.InwardIssueKey)) return "Missing required parameter 'InwardIssueKey'.";
+        if (string.IsNullOrWhiteSpace(args.LinkType)) return "Missing required parameter 'LinkType'. (e.g. 'Blocks', 'Relates')";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        logger.LogDebug("Linking issue {Outward} to {Inward} with type {Type}", args.OutwardIssueKey, args.InwardIssueKey, args.LinkType);
+        var payload = new
+        {
+            type = new { name = args.LinkType },
+            inwardIssue = new { key = args.InwardIssueKey },
+            outwardIssue = new { key = args.OutwardIssueKey }
+        };
+        return await client.PostAsync(AtlassianProduct.Jira, "issueLink", payload, ct);
+    }
+}
+
+public sealed class JiraAddWorklogActionHandler(IAtlassianHttpClient client, ILogger<JiraAddWorklogActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "jira_add_worklog";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.IssueKey)) return "Missing required parameter 'IssueKey'.";
+        if (string.IsNullOrWhiteSpace(args.TimeSpent)) return "Missing required parameter 'TimeSpent' (e.g. '1h 30m').";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        logger.LogDebug("Adding worklog to {IssueKey} for {Time}", args.IssueKey, args.TimeSpent);
+        var payload = new Dictionary<string, object> { ["timeSpent"] = args.TimeSpent! };
+        if (!string.IsNullOrWhiteSpace(args.Comment))
+        {
+            payload["comment"] = JiraHelper.ToAdf(args.Comment);
+        }
+        return await client.PostAsync(AtlassianProduct.Jira, $"issue/{args.IssueKey}/worklog", payload, ct);
+    }
+}
+
+public sealed class JiraDeleteIssueActionHandler() : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "jira_delete_issue";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.IssueKey)) return "Missing required parameter 'IssueKey'.";
+        return null;
+    }
+
+    public Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        return Task.FromResult("[ERROR] Destructive operations (like deletion) are permanently disabled in this MCP Server for safety reasons.");
+    }
+}
+
+public sealed class JiraAddAttachmentActionHandler(IAtlassianHttpClient client, ILogger<JiraAddAttachmentActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "jira_add_attachment";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.IssueKey)) return "Missing required parameter 'IssueKey'.";
+        if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing required parameter 'FilePath'.";
+        if (!System.IO.File.Exists(args.FilePath)) return $"File not found at path: {args.FilePath}";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        logger.LogDebug("Adding attachment {FilePath} to issue {IssueKey}", args.FilePath, args.IssueKey);
+        
+        var fileName = System.IO.Path.GetFileName(args.FilePath!);
+        var fileStream = System.IO.File.OpenRead(args.FilePath!);
+        
+        using var formData = new System.Net.Http.MultipartFormDataContent();
+        var fileContent = new System.Net.Http.StreamContent(fileStream);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        formData.Add(fileContent, "file", fileName);
+
+        return await client.PostMultipartAsync(AtlassianProduct.Jira, $"issue/{args.IssueKey}/attachments", formData, ct);
     }
 }

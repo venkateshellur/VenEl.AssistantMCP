@@ -15,4 +15,10 @@ public interface IAtlassianHttpClient
 
     /// <summary>Sends a PUT request with a JSON body and returns the JSON response body.</summary>
     Task<string> PutAsync(AtlassianProduct product, string path, object body, CancellationToken cancellationToken = default);
+
+    /// <summary>Sends a DELETE request and returns the JSON response body (or empty string on success).</summary>
+    Task<string> DeleteAsync(AtlassianProduct product, string path, CancellationToken cancellationToken = default);
+
+    /// <summary>Sends a POST request with multipart/form-data content, useful for attachments.</summary>
+    Task<string> PostMultipartAsync(AtlassianProduct product, string path, System.Net.Http.MultipartFormDataContent content, CancellationToken cancellationToken = default);
 }

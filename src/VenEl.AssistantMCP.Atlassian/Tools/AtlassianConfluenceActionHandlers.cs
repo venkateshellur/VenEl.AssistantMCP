@@ -156,3 +156,110 @@ public sealed class ConfluenceAddCommentActionHandler(IAtlassianHttpClient clien
         return await client.PostAsync(AtlassianProduct.Confluence, $"content/{args.PageId}/child/comment", payload, ct);
     }
 }
+
+public sealed class ConfluenceAddAttachmentActionHandler(IAtlassianHttpClient client, ILogger<ConfluenceAddAttachmentActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "confluence_add_attachment";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.PageId)) return "Missing required parameter 'PageId'.";
+        if (string.IsNullOrWhiteSpace(args.FilePath)) return "Missing required parameter 'FilePath'.";
+        if (!System.IO.File.Exists(args.FilePath)) return $"File not found at path: {args.FilePath}";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        logger.LogDebug("Adding attachment {FilePath} to Confluence page {PageId}", args.FilePath, args.PageId);
+        
+        var fileName = System.IO.Path.GetFileName(args.FilePath!);
+        var fileStream = System.IO.File.OpenRead(args.FilePath!);
+        
+        using var formData = new System.Net.Http.MultipartFormDataContent();
+        var fileContent = new System.Net.Http.StreamContent(fileStream);
+        fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        formData.Add(fileContent, "file", fileName);
+        formData.Add(new System.Net.Http.StringContent("Attached by AssistantMCP"), "comment");
+
+        return await client.PostMultipartAsync(AtlassianProduct.Confluence, $"content/{args.PageId}/child/attachment", formData, ct);
+    }
+}
+
+public sealed class ConfluenceGetPageChildrenActionHandler(IAtlassianHttpClient client, ILogger<ConfluenceGetPageChildrenActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "confluence_get_page_children";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.PageId)) return "Missing required parameter 'PageId'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        int limit = Math.Clamp(args.Limit ?? 50, 1, 100);
+        logger.LogDebug("Getting children for Confluence page {PageId}", args.PageId);
+        return await client.GetAsync(AtlassianProduct.Confluence, $"content/{args.PageId}/child/page?limit={limit}&expand=version,space", ct);
+    }
+}
+
+public sealed class ConfluenceAddLabelActionHandler(IAtlassianHttpClient client, ILogger<ConfluenceAddLabelActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "confluence_add_label";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.PageId)) return "Missing required parameter 'PageId'.";
+        if (string.IsNullOrWhiteSpace(args.LabelName)) return "Missing required parameter 'LabelName'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        logger.LogDebug("Adding label '{Label}' to Confluence page {PageId}", args.LabelName, args.PageId);
+        var payload = new[] { new { prefix = "global", name = args.LabelName } };
+        return await client.PostAsync(AtlassianProduct.Confluence, $"content/{args.PageId}/label", payload, ct);
+    }
+}
+
+public sealed class ConfluenceExportPageActionHandler(IAtlassianHttpClient client, ILogger<ConfluenceExportPageActionHandler> logger) : IActionHandler<AtlassianCommandArgs>
+{
+    public string ActionName => "confluence_export_page";
+
+    public string? Validate(AtlassianCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.PageId)) return "Missing required parameter 'PageId'.";
+        if (string.IsNullOrWhiteSpace(args.DownloadPath)) return "Missing required parameter 'DownloadPath'.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(AtlassianCommandArgs args, CancellationToken ct)
+    {
+        logger.LogDebug("Exporting Confluence page {PageId} to {Path}", args.PageId, args.DownloadPath);
+        
+        var response = await client.GetAsync(AtlassianProduct.Confluence, $"content/{args.PageId}?expand=body.export_view", ct);
+        if (response.StartsWith("[HTTP") || response.StartsWith("[ERROR]"))
+        {
+            return response;
+        }
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(response);
+            if (doc.RootElement.TryGetProperty("body", out var body) && 
+                body.TryGetProperty("export_view", out var exportView) && 
+                exportView.TryGetProperty("value", out var htmlValue))
+            {
+                var html = htmlValue.GetString();
+                await System.IO.File.WriteAllTextAsync(args.DownloadPath!, html, ct);
+                return $"Successfully exported page as HTML to: {args.DownloadPath}\n\nNote: Native PDF/Word export via API tokens is restricted by Atlassian Cloud, so HTML was exported instead.";
+            }
+            return "[ERROR] Could not parse export_view body from Confluence response.";
+        }
+        catch (Exception ex)
+        {
+            return $"[ERROR] Failed to save exported page: {ex.Message}";
+        }
+    }
+}

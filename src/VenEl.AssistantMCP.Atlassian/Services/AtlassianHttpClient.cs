@@ -37,13 +37,42 @@ public sealed class AtlassianHttpClient(
     // ── Public API ───────────────────────────────────────────────────────────
 
     public Task<string> GetAsync(AtlassianProduct product, string path, CancellationToken cancellationToken = default)
-        => SendAsync(HttpMethod.Get, product, path, body: null, cancellationToken);
+        => SendAsync(HttpMethod.Get, product, path, content: null, cancellationToken);
 
     public Task<string> PostAsync(AtlassianProduct product, string path, object body, CancellationToken cancellationToken = default)
-        => SendAsync(HttpMethod.Post, product, path, body, cancellationToken);
+        => SendAsync(HttpMethod.Post, product, path, JsonContent.Create(body), cancellationToken);
 
     public Task<string> PutAsync(AtlassianProduct product, string path, object body, CancellationToken cancellationToken = default)
-        => SendAsync(HttpMethod.Put, product, path, body, cancellationToken);
+        => SendAsync(HttpMethod.Put, product, path, JsonContent.Create(body), cancellationToken);
+
+    public Task<string> DeleteAsync(AtlassianProduct product, string path, CancellationToken cancellationToken = default)
+        => SendAsync(HttpMethod.Delete, product, path, content: null, cancellationToken);
+
+    public async Task<string> PostMultipartAsync(AtlassianProduct product, string path, System.Net.Http.MultipartFormDataContent content, CancellationToken cancellationToken = default)
+    {
+        // For Jira attachments, we must pass X-Atlassian-Token: no-check
+        var auth = await ResolveAuthAsync(cancellationToken);
+        if (auth is null) return "[CONFIG ERROR] No Atlassian credentials found.";
+        
+        var url = await BuildUrlAsync(product, path, auth, cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Authorization = auth;
+        request.Headers.Add("X-Atlassian-Token", "no-check");
+        request.Content = content;
+        
+        try
+        {
+            var response = await httpClient.SendAsync(request, cancellationToken);
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                return $"[HTTP {(int)response.StatusCode} {response.ReasonPhrase}] {responseContent}";
+            return PrettyPrint(responseContent);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return $"[ERROR] {ex.Message}";
+        }
+    }
 
     // ── Core send logic ──────────────────────────────────────────────────────
 
@@ -51,7 +80,7 @@ public sealed class AtlassianHttpClient(
         HttpMethod method,
         AtlassianProduct product,
         string path,
-        object? body,
+        HttpContent? content,
         CancellationToken cancellationToken)
     {
         // Resolve auth (preferred → fallback).
@@ -75,18 +104,18 @@ public sealed class AtlassianHttpClient(
         request.Headers.Authorization = auth;
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        if (body is not null)
-            request.Content = JsonContent.Create(body);
+        if (content is not null)
+            request.Content = content;
 
         try
         {
             var response = await httpClient.SendAsync(request, cancellationToken);
-            var content  = await response.Content.ReadAsStringAsync(cancellationToken);
+            var responseContent  = await response.Content.ReadAsStringAsync(cancellationToken);
 
             // ── Auto-healing logic for 410 Gone ──────────────────────────────
             if (response.StatusCode == System.Net.HttpStatusCode.Gone)
             {
-                var match = Regex.Match(content, @"migrate to the (/[^\s]+) API");
+                var match = Regex.Match(responseContent, @"migrate to the (/[^\s]+) API");
                 if (match.Success)
                 {
                     var newPath = match.Groups[1].Value;
@@ -99,8 +128,11 @@ public sealed class AtlassianHttpClient(
                     retryRequest.Headers.Authorization = auth;
                     retryRequest.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                     
-                    if (body is not null)
-                        retryRequest.Content = JsonContent.Create(body);
+                    if (content is not null)
+                    {
+                        // Note: If content is already consumed, this might fail, but for JsonContent it's usually fine
+                        retryRequest.Content = content;
+                    }
 
                     var retryResponse = await httpClient.SendAsync(retryRequest, cancellationToken);
                     var retryContent = await retryResponse.Content.ReadAsStringAsync(cancellationToken);
@@ -113,9 +145,9 @@ public sealed class AtlassianHttpClient(
             }
 
             if (!response.IsSuccessStatusCode)
-                return $"[HTTP {(int)response.StatusCode} {response.ReasonPhrase}] {content}";
+                return $"[HTTP {(int)response.StatusCode} {response.ReasonPhrase}] {responseContent}";
 
-            return PrettyPrint(content);
+            return PrettyPrint(responseContent);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
