@@ -78,8 +78,9 @@ public abstract class DispatcherToolBase<TArgs> where TArgs : class
                     result += notification;
                 }
             }
-            
-            return result;
+
+            var footer = $"\n\n[VenEl.AssistantMCP | {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC]";
+            return result + footer;
         }
         catch (Exception ex)
         {
