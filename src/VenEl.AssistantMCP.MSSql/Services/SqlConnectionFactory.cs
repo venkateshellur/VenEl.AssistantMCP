@@ -1,13 +1,17 @@
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
 using VenEl.AssistantMCP.MSSql.Configuration;
+using VenEl.AssistantMCP.Core.Security;
 
 namespace VenEl.AssistantMCP.MSSql.Services;
 
 /// <inheritdoc />
-internal sealed class SqlConnectionFactory(IOptions<MSSqlOptions> options) : ISqlConnectionFactory
+internal sealed class SqlConnectionFactory(IOptions<MSSqlOptions> options, SecretManager secretManager) : ISqlConnectionFactory
 {
     private readonly MSSqlOptions _options = options.Value;
+    private readonly SecretManager _secretManager = secretManager;
 
     // ── ISqlConnectionFactory ─────────────────────────────────────────────────
 
@@ -17,7 +21,7 @@ internal sealed class SqlConnectionFactory(IOptions<MSSqlOptions> options) : ISq
         _options.Servers.FirstOrDefault(
             s => s.Name.Equals(serverName, StringComparison.OrdinalIgnoreCase));
 
-    public SqlConnection CreateFromServerName(string serverName, string? database = null)
+    public async Task<SqlConnection> CreateFromServerNameAsync(string serverName, string? database = null, CancellationToken ct = default)
     {
         var entry = FindServer(serverName)
             ?? throw new InvalidOperationException(
@@ -25,15 +29,15 @@ internal sealed class SqlConnectionFactory(IOptions<MSSqlOptions> options) : ISq
                 $"Available: {string.Join(", ", _options.Servers.Select(s => s.Name))}");
 
         var effectiveDatabase = database ?? entry.DefaultDatabase;
-        return Build(entry.ConnectionString, effectiveDatabase);
+        return await BuildAsync(entry.ConnectionString, effectiveDatabase, ct);
     }
 
-    public SqlConnection CreateFromConnectionString(string connectionString, string? database = null)
+    public async Task<SqlConnection> CreateFromConnectionStringAsync(string connectionString, string? database = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new ArgumentException("Connection string must not be empty.", nameof(connectionString));
 
-        return Build(connectionString, database);
+        return await BuildAsync(connectionString, database, ct);
     }
 
     public bool IsDestructiveAllowed(string? serverName = null)
@@ -49,9 +53,10 @@ internal sealed class SqlConnectionFactory(IOptions<MSSqlOptions> options) : ISq
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static SqlConnection Build(string baseConnectionString, string? database)
+    private async Task<SqlConnection> BuildAsync(string baseConnectionString, string? database, CancellationToken ct)
     {
-        var csb = new SqlConnectionStringBuilder(baseConnectionString);
+        var resolvedConnectionString = await _secretManager.ResolveSecretAsync(baseConnectionString, ct);
+        var csb = new SqlConnectionStringBuilder(resolvedConnectionString);
 
         if (!string.IsNullOrWhiteSpace(database))
             csb.InitialCatalog = database;

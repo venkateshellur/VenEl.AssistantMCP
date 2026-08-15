@@ -19,14 +19,14 @@ public static class MSSqlHelper
 {
     public static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
-    public static SqlConnection ResolveConnection(
-        ISqlConnectionFactory factory, string? serverName, string? connectionString, string? database)
+    public static async Task<SqlConnection> ResolveConnectionAsync(
+        ISqlConnectionFactory factory, string? serverName, string? connectionString, string? database, CancellationToken ct = default)
     {
         if (!string.IsNullOrWhiteSpace(serverName))
-            return factory.CreateFromServerName(serverName, database);
+            return await factory.CreateFromServerNameAsync(serverName, database, ct);
 
         if (!string.IsNullOrWhiteSpace(connectionString))
-            return factory.CreateFromConnectionString(connectionString, database);
+            return await factory.CreateFromConnectionStringAsync(connectionString, database, ct);
 
         throw new InvalidOperationException(
             "You must supply either a 'ServerName' (from sql_list_configured_servers) " +
@@ -162,7 +162,7 @@ public sealed class SqlListDatabasesActionHandler(ISqlConnectionFactory factory)
             ORDER  BY name
             """;
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, null);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, null, ct);
         await conn.OpenAsync(ct);
         return await MSSqlHelper.ExecuteReaderAsync(conn, sql, [], cancellationToken: ct);
     }
@@ -195,7 +195,7 @@ public sealed class SqlListTablesActionHandler(ISqlConnectionFactory factory) : 
             ? new[] { new SqlParameter("@schema", args.Schema) }
             : [];
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, args.Database, ct);
         await conn.OpenAsync(ct);
         return await MSSqlHelper.ExecuteReaderAsync(conn, sql, parameters, cancellationToken: ct);
     }
@@ -249,7 +249,7 @@ public sealed class SqlDescribeTableActionHandler(ISqlConnectionFactory factory)
             new SqlParameter("@tableName", args.TableName)
         };
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, args.Database, ct);
         await conn.OpenAsync(ct);
         var result = await MSSqlHelper.ExecuteReaderAsync(conn, sql, parameters, cancellationToken: ct);
 
@@ -283,7 +283,7 @@ public sealed class SqlGetServerInfoActionHandler(ISqlConnectionFactory factory)
                 SERVERPROPERTY('EngineEdition')   AS [EngineEdition]
             """;
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, null);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, null, ct);
         await conn.OpenAsync(ct);
         return await MSSqlHelper.ExecuteReaderAsync(conn, sql, [], cancellationToken: ct);
     }
@@ -314,7 +314,7 @@ public sealed class SqlExecuteQueryActionHandler(ISqlConnectionFactory factory) 
 
         int maxRows = Math.Clamp(args.MaxRows ?? 500, 1, 5000);
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, args.Database, ct);
         await conn.OpenAsync(ct);
         return await MSSqlHelper.ExecuteReaderAsync(conn, args.Query!, [], maxRows, ct);
     }
@@ -351,7 +351,7 @@ public sealed class SqlExecuteStatementActionHandler(ISqlConnectionFactory facto
                 kw, args.ServerName ?? "(ad-hoc)", args.Database ?? "(default)");
         }
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, args.Database, ct);
         await conn.OpenAsync(ct);
 
         await using var cmd = conn.CreateCommand();
@@ -392,7 +392,7 @@ public sealed class SqlListStoredProceduresActionHandler(ISqlConnectionFactory f
             ? new[] { new SqlParameter("@schema", args.Schema) }
             : [];
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, args.Database, ct);
         await conn.OpenAsync(ct);
         return await MSSqlHelper.ExecuteReaderAsync(conn, sql, parameters, cancellationToken: ct);
     }
@@ -424,7 +424,7 @@ public sealed class SqlExecuteStoredProcedureActionHandler(ISqlConnectionFactory
                    "Expected format: {{\"@ParamName\": value}}";
         }
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, args.Database, ct);
         await conn.OpenAsync(ct);
 
         await using var cmd = conn.CreateCommand();
@@ -460,7 +460,7 @@ public sealed class SqlExportToExcelActionHandler(ISqlConnectionFactory factory)
             return $"[BLOCKED] Destructive queries are not allowed for Excel export.";
         }
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, args.Database, ct);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = args.Query!;
@@ -519,7 +519,7 @@ public sealed class SqlGenerateSchemaActionHandler(ISqlConnectionFactory factory
             ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
         ";
 
-        await using var conn = MSSqlHelper.ResolveConnection(factory, args.ServerName, args.ConnectionString, args.Database);
+        await using var conn = await MSSqlHelper.ResolveConnectionAsync(factory, args.ServerName, args.ConnectionString, args.Database, ct);
         await conn.OpenAsync(ct);
         return await MSSqlHelper.ExecuteReaderAsync(conn, sql, [], 5000, ct);
     }

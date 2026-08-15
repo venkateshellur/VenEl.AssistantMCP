@@ -7,17 +7,20 @@ using MimeKit;
 using MailKit.Net.Smtp;
 using VenEl.AssistantMCP.Core.Dispatcher;
 using VenEl.AssistantMCP.Email.Configuration;
+using VenEl.AssistantMCP.Core.Security;
 
 namespace VenEl.AssistantMCP.Email.Tools;
 
 public class SendEmailActionHandler : IActionHandler<EmailCommandArgs>
 {
     private readonly EmailOptions _options;
+    private readonly SecretManager _secretManager;
     private readonly ILogger<SendEmailActionHandler> _logger;
 
-    public SendEmailActionHandler(IOptions<EmailOptions> options, ILogger<SendEmailActionHandler> logger)
+    public SendEmailActionHandler(IOptions<EmailOptions> options, SecretManager secretManager, ILogger<SendEmailActionHandler> logger)
     {
         _options = options.Value;
+        _secretManager = secretManager;
         _logger = logger;
     }
 
@@ -112,7 +115,9 @@ public class SendEmailActionHandler : IActionHandler<EmailCommandArgs>
 
     private async Task<string> SendViaGraphApiAsync(EmailCommandArgs args, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(_options.GraphApiToken))
+        var token = await _secretManager.ResolveSecretAsync(_options.GraphApiToken, ct);
+
+        if (string.IsNullOrWhiteSpace(token))
         {
             return "Graph API Token is not configured in Email settings.";
         }
@@ -138,7 +143,7 @@ public class SendEmailActionHandler : IActionHandler<EmailCommandArgs>
             };
 
             using var httpClient = new System.Net.Http.HttpClient();
-            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _options.GraphApiToken);
+            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             
             var content = new System.Net.Http.StringContent(System.Text.Json.JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
             
@@ -178,9 +183,11 @@ public class SendEmailActionHandler : IActionHandler<EmailCommandArgs>
         await client.ConnectAsync(_options.SmtpServer!, _options.Port, 
             _options.EnableSsl ? MailKit.Security.SecureSocketOptions.StartTls : MailKit.Security.SecureSocketOptions.Auto, ct);
 
-        if (!string.IsNullOrWhiteSpace(_options.Username) && !string.IsNullOrWhiteSpace(_options.Password))
+        var password = await _secretManager.ResolveSecretAsync(_options.Password, ct);
+
+        if (!string.IsNullOrWhiteSpace(_options.Username) && !string.IsNullOrWhiteSpace(password))
         {
-            await client.AuthenticateAsync(_options.Username, _options.Password, ct);
+            await client.AuthenticateAsync(_options.Username, password, ct);
         }
 
         await client.SendAsync(message, ct);
@@ -201,9 +208,11 @@ public class SendEmailActionHandler : IActionHandler<EmailCommandArgs>
         using var client = new System.Net.Mail.SmtpClient(_options.SmtpServer, _options.Port);
         client.EnableSsl = _options.EnableSsl;
         
-        if (!string.IsNullOrWhiteSpace(_options.Username) && !string.IsNullOrWhiteSpace(_options.Password))
+        var password = await _secretManager.ResolveSecretAsync(_options.Password, ct);
+
+        if (!string.IsNullOrWhiteSpace(_options.Username) && !string.IsNullOrWhiteSpace(password))
         {
-            client.Credentials = new System.Net.NetworkCredential(_options.Username, _options.Password);
+            client.Credentials = new System.Net.NetworkCredential(_options.Username, password);
         }
 
         await client.SendMailAsync(message, ct);

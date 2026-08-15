@@ -8,12 +8,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using VenEl.AssistantMCP.Core.Dispatcher;
 using VenEl.AssistantMCP.Slack.Configuration;
+using VenEl.AssistantMCP.Core.Security;
 
 namespace VenEl.AssistantMCP.Slack.Tools;
 
 public sealed class SlackPostMessageActionHandler(
     IHttpClientFactory httpClientFactory,
     IOptions<SlackOptions> options,
+    SecretManager secretManager,
     ILogger<SlackPostMessageActionHandler> logger) : IActionHandler<SlackCommandArgs>
 {
     public string ActionName => "slack_post_message";
@@ -28,7 +30,8 @@ public sealed class SlackPostMessageActionHandler(
 
     public async Task<string> HandleAsync(SlackCommandArgs args, CancellationToken ct)
     {
-        var url = !string.IsNullOrWhiteSpace(args.WebhookUrl) ? args.WebhookUrl : options.Value.WebhookUrl;
+        var rawUrl = !string.IsNullOrWhiteSpace(args.WebhookUrl) ? args.WebhookUrl : options.Value.WebhookUrl;
+        var url = await secretManager.ResolveSecretAsync(rawUrl, ct);
         logger.LogDebug("Posting message to Slack webhook");
 
         var payload = new { text = args.Message };

@@ -11,6 +11,7 @@ using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using VenEl.AssistantMCP.Core.Dispatcher;
 using VenEl.AssistantMCP.MicrosoftTeams.Configuration;
+using VenEl.AssistantMCP.Core.Security;
 
 namespace VenEl.AssistantMCP.MicrosoftTeams.Tools;
 
@@ -18,42 +19,56 @@ public sealed class TeamsPostMessageActionHandler : IActionHandler<TeamsCommandA
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IOptions<TeamsOptions> _options;
+    private readonly SecretManager _secretManager;
     private readonly ILogger<TeamsPostMessageActionHandler> _logger;
-    private readonly GraphServiceClient? _graphClient;
+    private GraphServiceClient? _graphClient;
+    private bool _graphClientInitialized;
 
     public TeamsPostMessageActionHandler(
         IHttpClientFactory httpClientFactory,
         IOptions<TeamsOptions> options,
+        SecretManager secretManager,
         ILogger<TeamsPostMessageActionHandler> logger)
     {
         _httpClientFactory = httpClientFactory;
         _options = options;
+        _secretManager = secretManager;
         _logger = logger;
+    }
+
+    private async Task<GraphServiceClient?> GetGraphClientAsync(CancellationToken ct)
+    {
+        if (_graphClientInitialized) return _graphClient;
+        _graphClientInitialized = true;
 
         var opt = _options.Value;
-        if (!string.IsNullOrWhiteSpace(opt.TenantId) && 
-            !string.IsNullOrWhiteSpace(opt.ClientId) && 
-            !string.IsNullOrWhiteSpace(opt.ClientSecret))
+        var clientSecret = await _secretManager.ResolveSecretAsync(opt.ClientSecret, ct);
+        var clientId = await _secretManager.ResolveSecretAsync(opt.ClientId, ct);
+        var tenantId = await _secretManager.ResolveSecretAsync(opt.TenantId, ct);
+
+        if (!string.IsNullOrWhiteSpace(tenantId) && 
+            !string.IsNullOrWhiteSpace(clientId) && 
+            !string.IsNullOrWhiteSpace(clientSecret))
         {
-            var credential = new ClientSecretCredential(opt.TenantId, opt.ClientId, opt.ClientSecret);
+            var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
             _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
         }
-        else if (opt.UseInteractiveBrowserAuth && !string.IsNullOrWhiteSpace(opt.ClientId))
+        else if (opt.UseInteractiveBrowserAuth && !string.IsNullOrWhiteSpace(clientId))
         {
             var interactiveOptions = new InteractiveBrowserCredentialOptions
             {
-                TenantId = opt.TenantId,
-                ClientId = opt.ClientId
+                TenantId = tenantId,
+                ClientId = clientId
             };
             var credential = new InteractiveBrowserCredential(interactiveOptions);
             _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
         }
-        else if (opt.UseDeviceCodeAuth && !string.IsNullOrWhiteSpace(opt.ClientId))
+        else if (opt.UseDeviceCodeAuth && !string.IsNullOrWhiteSpace(clientId))
         {
             var deviceCodeOptions = new DeviceCodeCredentialOptions
             {
-                TenantId = opt.TenantId,
-                ClientId = opt.ClientId,
+                TenantId = tenantId,
+                ClientId = clientId,
                 DeviceCodeCallback = (code, cancellation) =>
                 {
                     _logger.LogWarning(code.Message);
@@ -68,6 +83,8 @@ public sealed class TeamsPostMessageActionHandler : IActionHandler<TeamsCommandA
             var credential = new DefaultAzureCredential();
             _graphClient = new GraphServiceClient(credential, new[] { "https://graph.microsoft.com/.default" });
         }
+
+        return _graphClient;
     }
 
     public string ActionName => "teams_post_message";
@@ -77,19 +94,25 @@ public sealed class TeamsPostMessageActionHandler : IActionHandler<TeamsCommandA
         if (string.IsNullOrWhiteSpace(args.Message)) 
             return "Missing required parameter 'Message'.";
             
-        // We need either Graph API configuration (TeamId and ChannelId) or a Webhook URL
-        bool hasGraphConfig = _graphClient != null && !string.IsNullOrWhiteSpace(args.TeamId) && !string.IsNullOrWhiteSpace(args.ChannelId);
-        bool hasWebhook = !string.IsNullOrWhiteSpace(args.WebhookUrl) || !string.IsNullOrWhiteSpace(_options.Value.FallbackWebhookUrl);
-
-        if (!hasGraphConfig && !hasWebhook)
-            return "Missing sufficient configuration to send message (Graph API auth+TeamId/ChannelId or Webhook URL).";
-
-        return null;
+        return null; // Defer complete validation to HandleAsync since we need to await secrets
     }
 
     public async Task<string> HandleAsync(TeamsCommandArgs args, CancellationToken ct)
     {
-        if (_graphClient != null && !string.IsNullOrWhiteSpace(args.TeamId) && !string.IsNullOrWhiteSpace(args.ChannelId))
+        var graphClient = await GetGraphClientAsync(ct);
+        
+        bool hasGraphConfig = graphClient != null && !string.IsNullOrWhiteSpace(args.TeamId) && !string.IsNullOrWhiteSpace(args.ChannelId);
+        
+        var rawFallback = _options.Value.FallbackWebhookUrl;
+        var rawWebhook = !string.IsNullOrWhiteSpace(args.WebhookUrl) ? args.WebhookUrl : rawFallback;
+        var webhookUrl = await _secretManager.ResolveSecretAsync(rawWebhook, ct);
+
+        bool hasWebhook = !string.IsNullOrWhiteSpace(webhookUrl);
+
+        if (!hasGraphConfig && !hasWebhook)
+            return "Missing sufficient configuration to send message (Graph API auth+TeamId/ChannelId or Webhook URL).";
+
+        if (hasGraphConfig)
         {
             try
             {
@@ -103,7 +126,7 @@ public sealed class TeamsPostMessageActionHandler : IActionHandler<TeamsCommandA
                     }
                 };
                 
-                await _graphClient.Teams[args.TeamId].Channels[args.ChannelId].Messages
+                await graphClient!.Teams[args.TeamId].Channels[args.ChannelId].Messages
                     .PostAsync(chatMessage, cancellationToken: ct);
                     
                 return "Message posted to Microsoft Teams via Graph API successfully.";
@@ -115,7 +138,6 @@ public sealed class TeamsPostMessageActionHandler : IActionHandler<TeamsCommandA
         }
 
         // Fallback to Webhook
-        var webhookUrl = !string.IsNullOrWhiteSpace(args.WebhookUrl) ? args.WebhookUrl : _options.Value.FallbackWebhookUrl;
         if (string.IsNullOrWhiteSpace(webhookUrl))
         {
             return "[ERROR] Graph API failed/unconfigured and no fallback webhook URL is available.";

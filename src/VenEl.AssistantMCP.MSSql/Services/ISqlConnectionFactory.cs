@@ -26,13 +26,13 @@ public interface ISqlConnectionFactory
     /// </summary>
     /// <param name="serverName">The <see cref="SqlServerEntry.Name"/> value.</param>
     /// <param name="database">Optional database override (overrides <c>InitialCatalog</c>).</param>
-    SqlConnection CreateFromServerName(string serverName, string? database = null);
+    Task<SqlConnection> CreateFromServerNameAsync(string serverName, string? database = null, CancellationToken ct = default);
 
     /// <summary>
     /// Creates a <see cref="SqlConnection"/> from a raw connection string,
     /// optionally overriding the database.
     /// </summary>
-    SqlConnection CreateFromConnectionString(string connectionString, string? database = null);
+    Task<SqlConnection> CreateFromConnectionStringAsync(string connectionString, string? database = null, CancellationToken ct = default);
 
     /// <summary>
     /// Resolves whether destructive operations are permitted for a given server.
