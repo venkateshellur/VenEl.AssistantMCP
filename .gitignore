@@ -478,5 +478,9 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# Vim temporary swap files
 *.swp
+
+# Temporary marketing and planning documents
+linkedin_post_v1.md
+linkedin_post_v2.md
+mcp_release_roadmap.md

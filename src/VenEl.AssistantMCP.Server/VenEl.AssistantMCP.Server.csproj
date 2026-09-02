@@ -3,12 +3,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>venel-mcp</ToolCommandName>
     <PackageOutputPath>./nupkg</PackageOutputPath>
-    <Version>1.3.7</Version>
+    <Version>1.4.0</Version>
     <PackageId>VenEl.AssistantMCP</PackageId>
     <Authors>Venkatesh Ellur</Authors>
     <Description>MCP Server Assistant for interacting with various platforms via Anthropic / Claude Desktop.</Description>
@@ -41,6 +42,7 @@
     <ProjectReference Include="..\VenEl.AssistantMCP.Email\VenEl.AssistantMCP.Email.csproj" />
     <ProjectReference Include="..\VenEl.AssistantMCP.WebAutomator\VenEl.AssistantMCP.WebAutomator.csproj" />
     <ProjectReference Include="..\VenEl.AssistantMCP.Host\VenEl.AssistantMCP.Host.csproj" />
+    <ProjectReference Include="..\VenEl.AssistantMCP.FTP\VenEl.AssistantMCP.FTP.csproj" />
   </ItemGroup>
 
   <ItemGroup>
