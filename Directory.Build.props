@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <PackageReadmeFile>MODULE_README.md</PackageReadmeFile>
+    <Description>Core business logic library for the VenEl MCP ecosystem. Not intended for standalone use outside of VenEl.ModularMCP or VenEl.AssistantMCP.</Description>
+    <Authors>Venkatesh Ellur</Authors>
+    <Company>VenEl</Company>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)MODULE_README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

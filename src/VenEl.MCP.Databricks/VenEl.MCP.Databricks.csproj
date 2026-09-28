@@ -13,7 +13,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>VenEl.MCP.Databricks</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>VenEl</Authors>
     <Description>VenEl Core Business Logic - VenEl.MCP.Databricks</Description>
     <TargetFramework>net8.0</TargetFramework>
