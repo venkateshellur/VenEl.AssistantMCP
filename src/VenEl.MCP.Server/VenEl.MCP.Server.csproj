@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>VenEl.MCP.Server</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>VenEl</Authors>
+    <Description>VenEl Core Business Logic - VenEl.MCP.Server</Description>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>venel-mcp</ToolCommandName>
+    <PackageOutputPath>./nupkg</PackageOutputPath>
+    <Version>1.4.1</Version>
+    <PackageId>VenEl.MCP</PackageId>
+    <Authors>Venkatesh Ellur</Authors>
+    <Description>MCP Server Assistant for interacting with various platforms via Anthropic / Claude Desktop.</Description>
+    <RepositoryUrl>https://github.com/venkateshellur/VenEl.MCP</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.FileExtensions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VenEl.MCP.Core\VenEl.MCP.Core.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Azure\VenEl.MCP.Azure.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Logging\VenEl.MCP.Logging.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Docker\VenEl.MCP.Docker.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.GitHub\VenEl.MCP.GitHub.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.MSSql\VenEl.MCP.MSSql.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Atlassian\VenEl.MCP.Atlassian.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.LocalOffice\VenEl.MCP.LocalOffice.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Slack\VenEl.MCP.Slack.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Kubernetes\VenEl.MCP.Kubernetes.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.AWS\VenEl.MCP.AWS.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.GCP\VenEl.MCP.GCP.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Databricks\VenEl.MCP.Databricks.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Bitwarden\VenEl.MCP.Bitwarden.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.MicrosoftTeams\VenEl.MCP.MicrosoftTeams.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Email\VenEl.MCP.Email.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.WebAutomator\VenEl.MCP.WebAutomator.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Host\VenEl.MCP.Host.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.FTP\VenEl.MCP.FTP.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ensure appsettings.json is present next to the executable at runtime -->
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <Target Name="EnableBitwardenOnPublish" AfterTargets="Publish">
+    <Message Text="Automatically enabling Bitwarden integration in the published appsettings.json..." Importance="high" />
+    <!-- macOS uses sed -i '' -->
+    <Exec Command="sed -i '' 's/&quot;IsEnabled&quot;: false/&quot;IsEnabled&quot;: true/g' &quot;$(PublishDir)appsettings.json&quot;" Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+    <!-- Linux uses sed -i -->
+    <Exec Command="sed -i 's/&quot;IsEnabled&quot;: false/&quot;IsEnabled&quot;: true/g' &quot;$(PublishDir)appsettings.json&quot;" Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
+  </Target>
+
+</Project>

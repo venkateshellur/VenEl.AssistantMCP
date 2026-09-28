@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>VenEl.MCP.GCP</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>VenEl</Authors>
+    <Description>VenEl Core Business Logic - VenEl.MCP.GCP</Description>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Cloud.Compute.V1" Version="3.28.0" />
+    <PackageReference Include="Google.Cloud.Storage.V1" Version="4.14.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VenEl.MCP.Core\VenEl.MCP.Core.csproj" />
+  </ItemGroup>
+
+</Project>

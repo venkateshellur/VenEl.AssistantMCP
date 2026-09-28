@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VenEl.MCP.Azure/VenEl.MCP.Azure.csproj" />
+    <Project Path="src/VenEl.MCP.Bitwarden/VenEl.MCP.Bitwarden.csproj" />
+    <Project Path="src/VenEl.MCP.Core/VenEl.MCP.Core.csproj" />
+    <Project Path="src/VenEl.MCP.LocalOffice/VenEl.MCP.LocalOffice.csproj" />
+    <Project Path="src/VenEl.MCP.MicrosoftTeams/VenEl.MCP.MicrosoftTeams.csproj" />
+    <Project Path="src/VenEl.MCP.MSSql/VenEl.MCP.MSSql.csproj" />
+    <Project Path="src/VenEl.MCP.Atlassian/VenEl.MCP.Atlassian.csproj" />
+    <Project Path="src/VenEl.MCP.Databricks/VenEl.MCP.Databricks.csproj" />
+    <Project Path="src/VenEl.MCP.Docker/VenEl.MCP.Docker.csproj" />
+    <Project Path="src/VenEl.MCP.GitHub/VenEl.MCP.GitHub.csproj" />
+    <Project Path="src/VenEl.MCP.Host/VenEl.MCP.Host.csproj" />
+    <Project Path="src/VenEl.MCP.Kubernetes/VenEl.MCP.Kubernetes.csproj" />
+    <Project Path="src/VenEl.MCP.Logging/VenEl.MCP.Logging.csproj" />
+    <Project Path="src/VenEl.MCP.Slack/VenEl.MCP.Slack.csproj" />
+    <Project Path="src/VenEl.MCP.GCP/VenEl.MCP.GCP.csproj" />
+    <Project Path="src/VenEl.MCP.AWS/VenEl.MCP.AWS.csproj" />
+    <Project Path="src/VenEl.MCP.Email/VenEl.MCP.Email.csproj" />
+    <Project Path="src/VenEl.MCP.Server/VenEl.MCP.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VenEl.MCP.Azure.Tests/VenEl.MCP.Azure.Tests.csproj" />
+  </Folder>
+</Solution>

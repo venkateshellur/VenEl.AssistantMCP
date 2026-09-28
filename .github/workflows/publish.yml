@@ -23,79 +23,17 @@ jobs:
       with:
         dotnet-version: '10.0.x'
         
-    - name: Restore dependencies
-      run: dotnet restore src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.csproj
-      
-    - name: Publish Self-Contained
+    - name: Pack NuGet Packages
       run: |
-        dotnet publish src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.csproj \
-          -c Release \
-          -r ${{ matrix.os }} \
-          -f net8.0 \
-          --self-contained true \
-          -p:PublishSingleFile=true \
-          -o ./publish/${{ matrix.os }}
-          
-    - name: Zip the output
-      run: |
-        cd ./publish/${{ matrix.os }}
-        zip -r ../../VenEl.AssistantMCP-${{ matrix.os }}.zip ./*
-        cd ../../
-        
-    - name: Release
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: VenEl.AssistantMCP-${{ matrix.os }}.zip
-
-  build-and-push-docker:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Extract metadata (tags, labels) for Docker
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ghcr.io/${{ github.repository }}
-        
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-
-  publish-nuget:
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.0.x'
-        
-    - name: Restore dependencies
-      run: dotnet restore src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.csproj
-      
-    - name: Build
-      run: dotnet build src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.csproj -c Release --no-restore
-      
-    - name: Pack NuGet Package
-      run: dotnet pack src/VenEl.AssistantMCP.Server/VenEl.AssistantMCP.Server.csproj -c Release --no-build -o nupkg
+        for d in src/VenEl.MCP.*; do
+          if [ -d "$d" ]; then
+            projName=$(basename "$d")
+            # Skip Host or Server projects, just pack the logic libraries
+            if [[ "$projName" != *"Host" && "$projName" != *"Server" ]]; then
+              dotnet pack "$d/$projName.csproj" -c Release -o nupkg
+            fi
+          fi
+        done
       
     - name: Push to NuGet
       run: dotnet nuget push "nupkg/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

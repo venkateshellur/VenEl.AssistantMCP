@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>VenEl.MCP.WebAutomator</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>VenEl</Authors>
+    <Description>VenEl Core Business Logic - VenEl.MCP.WebAutomator</Description>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" Version="1.62.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VenEl.MCP.Core\VenEl.MCP.Core.csproj" />
+  </ItemGroup>
+
+</Project>

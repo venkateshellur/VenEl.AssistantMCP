@@ -1,6 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>WebAutomatorTest</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>VenEl</Authors>
+    <Description>VenEl Core Business Logic - WebAutomatorTest</Description>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -13,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\VenEl.AssistantMCP.WebAutomator\VenEl.AssistantMCP.WebAutomator.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.WebAutomator\VenEl.MCP.WebAutomator.csproj" />
   </ItemGroup>
 
 </Project>

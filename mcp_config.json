@@ -3,7 +3,7 @@
     "venel": {
       "command": "dotnet",
       "args": [
-        "/Users/venkateshellur/Venky/Git/VenEl.AssistantMCP/VenEl.AssistantMCP/publish/VenEl.AssistantMCP.Server.dll"
+        "/Users/venkateshellur/Venky/Git/VenEl.MCP/VenEl.MCP/publish/VenEl.MCP.Server.dll"
       ]
     }
   }
@@ -11,7 +11,7 @@
 {
   "mcpServers": {
     "venel": {
-      "command": "C:\\Venky\\MCPs\\VenEl.MCPAssistant\\VenEl.AssistantMCP.Server.exe",
+      "command": "C:\\Venky\\MCPs\\VenEl.MCPAssistant\\VenEl.MCP.Server.exe",
       "args": []
     }
   }
