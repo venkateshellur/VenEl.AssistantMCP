@@ -19,10 +19,16 @@ public sealed class AtlassianDispatcherTool : DispatcherToolBase<AtlassianComman
 
     [McpServerTool(Name = "mcp_venel_atlassian_commands")]
     [Description("Atlassian Cloud tools: Jira issues/projects/sprints, Confluence pages/spaces, Bitbucket repositories/pull requests/pipelines, and session credential setup.")]
-    public Task<string> DispatchAtlassianCommandAsync(
+        public async Task<string> DispatchAtlassianCommandAsync(
         [Description("The arguments for the Atlassian command")] AtlassianCommandArgs args,
         CancellationToken ct)
     {
-        return DispatchAsync(args, ct);
+        try {
+            System.Console.Error.WriteLine("[AtlassianDispatcherTool] Entering DispatchAtlassianCommandAsync");
+            return await DispatchAsync(args, ct);
+        } catch (System.Exception ex) {
+            System.Console.Error.WriteLine("[AtlassianDispatcherTool] Exception: " + ex.ToString());
+            return "Fatal Error: " + ex.Message;
+        }
     }
 }
