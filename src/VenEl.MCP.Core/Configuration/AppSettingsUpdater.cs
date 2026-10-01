@@ -13,7 +13,7 @@ public class AppSettingsUpdater
     public AppSettingsUpdater()
     {
         var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var configDir = Path.Combine(userProfile, ".venel-mcp");
+        var configDir = Path.Combine(userProfile, ".venel.assistant.mcp");
         if (!Directory.Exists(configDir))
         {
             Directory.CreateDirectory(configDir);

@@ -48,7 +48,7 @@ Because VenEl is published to NuGet, you can install it globally in one command.
 ```bash
 dotnet tool install -g VenEl.AssistantMCP
 ```
-*This installs the `venel-mcp` executable to your system path.*
+*This installs the `venel.assistant.mcp` executable to your system path.*
 
 **Alternatively:** You can download a standalone, self-contained zip for Windows/Mac/Linux directly from the [GitHub Releases](https://github.com/venkateshellur/VenEl.AssistantMCP/releases) page.
 
@@ -59,7 +59,7 @@ Add the server to your `claude_desktop_config.json` (located at `~/Library/Appli
 {
   "mcpServers": {
     "venel-assistant": {
-      "command": "venel-mcp",
+      "command": "venel.assistant.mcp",
       "args": []
     }
   }
@@ -73,11 +73,11 @@ If you prefer to split your tools into separate AI servers (for security or logi
 {
   "mcpServers": {
     "venel-azure-ops": {
-      "command": "venel-mcp",
+      "command": "venel.assistant.mcp",
       "args": ["--feature", "Azure", "--feature", "Docker"]
     },
     "venel-productivity": {
-      "command": "venel-mcp",
+      "command": "venel.assistant.mcp",
       "args": ["--feature", "Atlassian", "--feature", "Slack"]
     }
   }
@@ -89,7 +89,7 @@ If you prefer to split your tools into separate AI servers (for security or logi
 ## 🔐 Configuration & Authentication
 
 On first run, the tool automatically generates a local configuration directory at:
-**`~/.venel-mcp/appsettings.json`**
+**`~/.venel.assistant.mcp/appsettings.json`**
 
 Open this file and populate the necessary API keys and endpoints for the integrations you wish to use. The server safely parses these on startup and injects them into the HTTP clients.
 
@@ -99,7 +99,7 @@ Open this file and populate the necessary API keys and endpoints for the integra
 
 ```mermaid
 graph TD
-    A[Claude Desktop / Windsurf] -->|STDIO JSON-RPC| B(venel-mcp Server)
+    A[Claude Desktop / Windsurf] -->|STDIO JSON-RPC| B(venel.assistant.mcp Server)
     B --> C{Core Router}
     C --> D[Atlassian Engine]
     C --> E[GitHub Engine]

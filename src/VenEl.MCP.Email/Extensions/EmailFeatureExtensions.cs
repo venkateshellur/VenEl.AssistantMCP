@@ -19,7 +19,7 @@ public static class EmailFeatureExtensions
         // Register the tools for the MCP server
         services.GetOrAddFeatureRegistry().Register(
             featureName: "Email",
-            description: "Email automation tools: send emails via SMTP.",
+            description: "Email automation tools: send, read, and search emails, tasks, and calendar events via Outlook.",
             toolRegistration: mcpBuilder => mcpBuilder.WithTools<EmailDispatcherTool>()
         );
 

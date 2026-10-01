@@ -38,7 +38,7 @@ var builder = Host.CreateEmptyApplicationBuilder(settings: null);
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-var userConfigDir = Path.Combine(userProfile, ".venel-mcp");
+var userConfigDir = Path.Combine(userProfile, ".venel.assistant.mcp");
 var userConfigPath = Path.Combine(userConfigDir, "appsettings.json");
 
 builder.Configuration
