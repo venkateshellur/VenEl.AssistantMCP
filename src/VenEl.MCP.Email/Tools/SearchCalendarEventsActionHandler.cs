@@ -52,7 +52,6 @@ public class SearchCalendarEventsActionHandler : IActionHandler<EmailCommandArgs
             string oneYearAgo = DateTime.Today.AddYears(-1).ToString("MM/dd/yyyy hh:mm tt");
             items = items.Restrict($"[Start] >= '{oneYearAgo}'");
             
-            var conditions = new List<string>();
 
             if (!string.IsNullOrEmpty(args.SearchSubject))
                 conditions.Add($"\"urn:schemas:httpmail:subject\" ci_phrasematch '{args.SearchSubject.Replace("'", "''")}'");
