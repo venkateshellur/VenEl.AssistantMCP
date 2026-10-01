@@ -28,6 +28,8 @@ public static class AzureServiceExtensions
         // ── Session credentials ───────────────────────────────────────────────
         services.AddSingleton<AzureSessionCredentials>();
 
+        services.AddSingleton<IAzureBlobService, AzureBlobService>();
+
         // ── HTTP client ───────────────────────────────────────────────────────
         services.AddHttpClient<IAzureHttpClient, AzureHttpClient>().AddMcpCaching();
 
@@ -37,7 +39,7 @@ public static class AzureServiceExtensions
         // ── Self-register MCP tools into the shared registry ──────────────────
         services.GetOrAddFeatureRegistry().Register(
             featureName: "Azure",
-            description: "Azure tools: Azure DevOps projects, repositories, pull requests, pipelines, work items, Key Vault secrets/certificates, and session credential setup.",
+            description: "Azure tools: Azure DevOps projects, repositories, pull requests, pipelines, work items, Key Vault secrets/certificates, Blob Storage, and session credential setup.",
             toolRegistration: mcpBuilder => mcpBuilder.WithTools<AzureDispatcherTool>());
 
         return services;

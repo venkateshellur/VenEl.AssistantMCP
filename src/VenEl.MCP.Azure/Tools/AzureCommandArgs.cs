@@ -4,7 +4,7 @@ namespace VenEl.MCP.Azure.Tools;
 
 public class AzureCommandArgs
 {
-    [Description("The action to perform. Options: azure_list_projects, azure_list_repos, azure_list_pull_requests, azure_configure, azure_show_config")]
+    [Description("The action to perform. Options: azure_list_projects, azure_list_repos, azure_list_pull_requests, azure_configure, azure_show_config, azure_list_blob_containers, azure_list_blobs, azure_read_blob, azure_upload_blob")]
     public string Action { get; set; } = string.Empty;
 
     // DevOps specific
@@ -57,4 +57,18 @@ public class AzureCommandArgs
 
     [Description("The name of the certificate. Used by azure_get_certificate.")]
     public string? CertificateName { get; set; }
+
+    // Blob Storage specific
+    [Description("The Azure Storage connection string. Used by azure blob operations.")]
+    public string? ConnectionString { get; set; }
+
+    [Description("The name of the Azure Blob Storage container. Used by azure blob operations.")]
+    public string? ContainerName { get; set; }
+
+    [Description("The name of the blob. Used by azure blob operations.")]
+    public string? BlobName { get; set; }
+
+    [Description("The content to upload to the blob. Used by azure_upload_blob.")]
+    public string? Content { get; set; }
 }
+

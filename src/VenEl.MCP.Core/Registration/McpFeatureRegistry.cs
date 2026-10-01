@@ -50,6 +50,7 @@ public sealed class McpFeatureRegistry
     /// <param name="allowedFeatures">Optional set of feature names to apply. If null or empty, all features are applied.</param>
     public IMcpServerBuilder ApplyAll(IMcpServerBuilder mcpBuilder, IReadOnlySet<string>? allowedFeatures = null)
     {
+        Console.Error.WriteLine("ApplyAll running with " + _registrations.Count + " registrations.");
         foreach (var reg in _registrations)
         {
             if (allowedFeatures == null || allowedFeatures.Count == 0 || allowedFeatures.Contains(reg.FeatureName, StringComparer.OrdinalIgnoreCase))
