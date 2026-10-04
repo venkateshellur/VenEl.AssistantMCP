@@ -48,6 +48,7 @@
     <ProjectReference Include="..\VenEl.MCP.WebAutomator\VenEl.MCP.WebAutomator.csproj" />
     <ProjectReference Include="..\VenEl.MCP.Host\VenEl.MCP.Host.csproj" />
     <ProjectReference Include="..\VenEl.MCP.FTP\VenEl.MCP.FTP.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.ServiceNow\VenEl.MCP.ServiceNow.csproj" />
   </ItemGroup>
 
   <ItemGroup>

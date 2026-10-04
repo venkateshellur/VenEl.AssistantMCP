@@ -17,6 +17,7 @@
     <Project Path="src/VenEl.MCP.GCP/VenEl.MCP.GCP.csproj" />
     <Project Path="src/VenEl.MCP.AWS/VenEl.MCP.AWS.csproj" />
     <Project Path="src/VenEl.MCP.Email/VenEl.MCP.Email.csproj" />
+    <Project Path="src/VenEl.MCP.ServiceNow/VenEl.MCP.ServiceNow.csproj" />
     <Project Path="src/VenEl.MCP.Server/VenEl.MCP.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">
