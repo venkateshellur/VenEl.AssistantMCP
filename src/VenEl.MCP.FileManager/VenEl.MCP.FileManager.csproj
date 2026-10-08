@@ -3,13 +3,19 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>VenEl.MCP.FileManager</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>VenEl</Authors>
-    <Description>VenEl Core Business Logic - VenEl.MCP.FileManager</Description>
+    <Description>An interactive, AI-powered file management MCP plugin. Bring your local file system natively into your AI IDEs with zero-click embedded UIs, fast search, and rich previews.</Description>
+    <PackageTags>MCP;AI;LLM;FileManager;UI;IDE;VenEl</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
