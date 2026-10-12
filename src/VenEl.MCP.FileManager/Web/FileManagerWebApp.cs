@@ -420,8 +420,8 @@ public static class FileManagerWebApp
                     <div id="path-dropdown" class="path-dropdown" style="display: none;"></div>
                 </div>
                 <div class="nav-buttons view-toggles">
-                    <button id="btn-list" onclick="setView('list')" class="active" title="List View">☰</button>
-                    <button id="btn-grid" onclick="setView('grid')" title="Grid View">⊞</button>
+                    <button id="btn-list" onclick="setView('list')" title="List View">☰</button>
+                    <button id="btn-grid" onclick="setView('grid')" class="active" title="Grid View">⊞</button>
                     <button id="btn-preview" onclick="togglePreview()" class="active" title="Toggle Preview Pane" style="margin-left: 10px;">👁</button>
                 </div>
             </header>
@@ -430,7 +430,7 @@ public static class FileManagerWebApp
             </div>
             <div class="main-content">
                 <div class="file-list-container">
-                    <div id="files" class="list-view"></div>
+                    <div id="files" class="grid-view"></div>
                 </div>
                 <div class="preview-pane" id="preview-pane">
                     <h2>Preview</h2>
@@ -443,7 +443,7 @@ public static class FileManagerWebApp
             <script>
                 let currentPath = ".";
                 let isWindows = false;
-                let currentView = "list";
+                let currentView = "grid";
                 let previewVisible = true;
                 let currentItems = [];
 
