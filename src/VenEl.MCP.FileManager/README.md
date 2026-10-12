@@ -11,6 +11,7 @@ Most MCP integrations just execute basic JSON RPC commands in the background. We
 With this package, when you type _"Open File Manager"_ to your AI assistant, you get a beautiful, interactive web interface magically rendered **inside your IDE** (or OS browser if you prefer!). 
 
 *   **🪄 Zero-Click AI Integration**: The AI can dynamically open the Explorer UI exactly where you need it.
+*   **🧭 Editable Dropdown Address Bar**: Navigate directly like Windows Explorer or Mac Finder, with 1-click access to system drives, user roots, folder hierarchy, and subdirectories.
 *   **🖼️ Rich Previews**: Instantly view your `.png`, `.jpg`, `.cs`, `.json`, and text files directly within a responsive side-panel!
 *   **⚡ Blazing Fast Search**: Filter files and directories instantly as you type.
 *   **🎨 Stunning Design**: Enjoy a premium aesthetic with deep dark mode, smooth hover animations, and an intuitive grid/list toggle.

@@ -83,6 +83,51 @@ public static class FileManagerWebApp
             return Results.File(path, mimeType);
         });
 
+        _app.MapGet("/api/files/roots", () => 
+        {
+            var roots = new List<object>();
+            try 
+            {
+                foreach (var drive in DriveInfo.GetDrives())
+                {
+                    try
+                    {
+                        var path = drive.RootDirectory.FullName;
+                        if (path.StartsWith("/System/Volumes") || path.StartsWith("/dev") || path.StartsWith("/private"))
+                            continue;
+
+                        var label = string.IsNullOrWhiteSpace(drive.VolumeLabel) ? drive.Name : $"{drive.Name} ({drive.VolumeLabel})";
+                        roots.Add(new { 
+                            name = label, 
+                            path = path,
+                            type = "Drive"
+                        });
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
+            void TryAddSpecial(Environment.SpecialFolder folder, string name, string type)
+            {
+                try
+                {
+                    var p = Environment.GetFolderPath(folder);
+                    if (!string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
+                    {
+                        roots.Add(new { name = name, path = p, type = type });
+                    }
+                }
+                catch { }
+            }
+
+            TryAddSpecial(Environment.SpecialFolder.UserProfile, "Home (~)", "Home");
+            TryAddSpecial(Environment.SpecialFolder.Desktop, "Desktop", "Desktop");
+            TryAddSpecial(Environment.SpecialFolder.MyDocuments, "Documents", "Documents");
+
+            return Results.Ok(roots);
+        });
+
         // UI Dashboard
         _app.MapGet("/", () => Results.Content(GetIndexHtml(), "text/html"));
 
@@ -152,23 +197,102 @@ public static class FileManagerWebApp
                     background: var(--accent);
                     border-color: var(--accent);
                 }
-                .path-bar {
+                .path-bar-container {
                     flex-grow: 1;
+                    position: relative;
+                }
+                .path-bar {
                     display: flex;
                     align-items: center;
                     background: var(--bg-color);
                     border: 1px solid var(--border-color);
                     border-radius: 6px;
-                    padding: 0 10px;
+                    padding: 0 4px 0 10px;
+                    transition: border-color 0.2s, box-shadow 0.2s;
+                }
+                .path-bar:focus-within {
+                    border-color: var(--accent);
+                    box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
                 }
                 #path {
                     width: 100%;
                     background: transparent;
                     border: none;
                     color: var(--text-main);
-                    padding: 10px;
-                    font-size: 14px;
+                    padding: 9px 0;
+                    font-size: 13px;
                     outline: none;
+                    font-family: inherit;
+                }
+                #btn-path-dropdown {
+                    background: transparent;
+                    border: none;
+                    color: var(--text-muted);
+                    padding: 6px 8px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 11px;
+                    line-height: 1;
+                    transition: 0.15s;
+                }
+                #btn-path-dropdown:hover {
+                    background: var(--hover-bg);
+                    color: var(--text-main);
+                }
+                .path-dropdown {
+                    position: absolute;
+                    top: calc(100% + 6px);
+                    left: 0;
+                    right: 0;
+                    background: #18181c;
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+                    max-height: 380px;
+                    overflow-y: auto;
+                    z-index: 1000;
+                    display: flex;
+                    flex-direction: column;
+                    padding: 6px 0;
+                }
+                .dropdown-section-title {
+                    font-size: 10px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.8px;
+                    color: var(--text-muted);
+                    padding: 8px 14px 4px;
+                }
+                .dropdown-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 8px 14px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    color: var(--text-main);
+                    transition: background 0.15s;
+                }
+                .dropdown-item:hover {
+                    background: var(--hover-bg);
+                }
+                .dropdown-item i {
+                    font-style: normal;
+                    font-size: 16px;
+                }
+                .dropdown-item .item-sub {
+                    color: var(--text-muted);
+                    font-size: 11px;
+                    margin-left: auto;
+                    max-width: 50%;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+                .dropdown-divider {
+                    height: 1px;
+                    background: var(--border-color);
+                    margin: 6px 0;
                 }
                 .main-content {
                     display: flex;
@@ -288,8 +412,12 @@ public static class FileManagerWebApp
                     <button onclick="goUp()" title="Go Up One Level">⬆ Up</button>
                     <button onclick="goHome()" title="Go Home">🏠 Home</button>
                 </div>
-                <div class="path-bar">
-                    <input type="text" id="path" onkeypress="handlePathEnter(event)" />
+                <div class="path-bar-container">
+                    <div class="path-bar">
+                        <input type="text" id="path" onkeypress="handlePathEnter(event)" placeholder="Enter path or choose location..." autocomplete="off" />
+                        <button id="btn-path-dropdown" onclick="togglePathDropdown(event)" title="Browse drives and folders">▾</button>
+                    </div>
+                    <div id="path-dropdown" class="path-dropdown" style="display: none;"></div>
                 </div>
                 <div class="nav-buttons view-toggles">
                     <button id="btn-list" onclick="setView('list')" class="active" title="List View">☰</button>
@@ -483,7 +611,138 @@ public static class FileManagerWebApp
                     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
                 }
 
+                let systemRoots = [];
+
+                async function fetchRoots() {
+                    try {
+                        const res = await fetch('/api/files/roots');
+                        if (res.ok) {
+                            systemRoots = await res.json();
+                        }
+                    } catch (e) {
+                        console.error('Failed to load roots', e);
+                    }
+                }
+
+                function togglePathDropdown(e) {
+                    if (e) e.stopPropagation();
+                    const dropdown = document.getElementById('path-dropdown');
+                    if (dropdown.style.display === 'none' || !dropdown.style.display) {
+                        openPathDropdown();
+                    } else {
+                        closePathDropdown();
+                    }
+                }
+
+                function openPathDropdown() {
+                    const dropdown = document.getElementById('path-dropdown');
+                    renderPathDropdown();
+                    dropdown.style.display = 'flex';
+                }
+
+                function closePathDropdown() {
+                    const dropdown = document.getElementById('path-dropdown');
+                    dropdown.style.display = 'none';
+                }
+
+                function renderPathDropdown() {
+                    const dropdown = document.getElementById('path-dropdown');
+                    let html = '';
+
+                    // 1. Drives & System Locations
+                    if (systemRoots && systemRoots.length > 0) {
+                        html += '<div class="dropdown-section-title">Drives & System Roots</div>';
+                        for (const root of systemRoots) {
+                            const icon = root.type === 'Drive' ? '💻' : root.type === 'Home' ? '🏠' : root.type === 'Desktop' ? '🖥️' : '📁';
+                            html += `
+                                <div class="dropdown-item" onclick="selectDropdownPath('${escapePath(root.path)}')">
+                                    <i>${icon}</i>
+                                    <span>${escapeHtml(root.name)}</span>
+                                    <span class="item-sub">${escapeHtml(root.path)}</span>
+                                </div>
+                            `;
+                        }
+                    }
+
+                    // 2. Folder Hierarchy / Breadcrumb trail
+                    const sep = isWindows ? '\\' : '/';
+                    if (currentPath && currentPath !== '.') {
+                        const parts = currentPath.split(sep).filter(p => p !== '');
+                        if (parts.length > 0) {
+                            html += '<div class="dropdown-divider"></div>';
+                            html += '<div class="dropdown-section-title">Folder Hierarchy</div>';
+                            
+                            // Root level
+                            const rootPath = isWindows ? (currentPath.slice(0, 3)) : '/';
+                            html += `
+                                <div class="dropdown-item" onclick="selectDropdownPath('${escapePath(rootPath)}')">
+                                    <i>📁</i>
+                                    <span>${isWindows ? rootPath : '/ (Root)'}</span>
+                                    <span class="item-sub">${escapeHtml(rootPath)}</span>
+                                </div>
+                            `;
+
+                            let accum = isWindows ? rootPath : '';
+                            for (let i = 0; i < parts.length; i++) {
+                                if (isWindows && i === 0 && parts[0].endsWith(':')) continue;
+                                accum = isWindows ? (accum.endsWith('\\') ? accum + parts[i] : accum + '\\' + parts[i]) : accum + '/' + parts[i];
+                                const isCurrent = (accum === currentPath);
+                                html += `
+                                    <div class="dropdown-item" style="padding-left: ${(i + 2) * 12}px; ${isCurrent ? 'font-weight: 600; color: #74b9ff;' : ''}" onclick="selectDropdownPath('${escapePath(accum)}')">
+                                        <i>📂</i>
+                                        <span>${escapeHtml(parts[i])}${isCurrent ? ' (Current)' : ''}</span>
+                                        <span class="item-sub">${escapeHtml(accum)}</span>
+                                    </div>
+                                `;
+                            }
+                        }
+                    }
+
+                    // 3. Child Folders in Current Directory
+                    const subdirs = currentItems.filter(i => i.type === 'Directory');
+                    if (subdirs.length > 0) {
+                        html += '<div class="dropdown-divider"></div>';
+                        html += '<div class="dropdown-section-title">Subfolders in Current Directory</div>';
+                        for (const sub of subdirs) {
+                            const subPath = currentPath.endsWith(sep) ? currentPath + sub.name : currentPath + sep + sub.name;
+                            html += `
+                                <div class="dropdown-item" onclick="selectDropdownPath('${escapePath(subPath)}')">
+                                    <i>📁</i>
+                                    <span>${escapeHtml(sub.name)}</span>
+                                </div>
+                            `;
+                        }
+                    }
+
+                    dropdown.innerHTML = html;
+                }
+
+                function escapePath(path) {
+                    return path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                }
+
+                function selectDropdownPath(targetPath) {
+                    closePathDropdown();
+                    loadFiles(targetPath);
+                }
+
+                // Close dropdown when clicking outside
+                document.addEventListener('click', function(e) {
+                    const container = document.querySelector('.path-bar-container');
+                    if (container && !container.contains(e.target)) {
+                        closePathDropdown();
+                    }
+                });
+
+                // Escape key closes dropdown
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        closePathDropdown();
+                    }
+                });
+
                 // Initial load
+                fetchRoots();
                 loadFiles('.');
             </script>
         </body>

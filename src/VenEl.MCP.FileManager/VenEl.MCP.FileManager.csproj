@@ -3,7 +3,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>VenEl.MCP.FileManager</PackageId>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Authors>VenEl</Authors>
     <Description>An interactive, AI-powered file management MCP plugin. Bring your local file system natively into your AI IDEs with zero-click embedded UIs, fast search, and rich previews.</Description>
     <PackageTags>MCP;AI;LLM;FileManager;UI;IDE;VenEl</PackageTags>
