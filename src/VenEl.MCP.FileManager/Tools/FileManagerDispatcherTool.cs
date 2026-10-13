@@ -18,7 +18,7 @@ public class FileManagerDispatcherTool : DispatcherToolBase<FileManagerCommandAr
     protected override string? GetRequestedAction(FileManagerCommandArgs args) => args.Action;
 
     [McpServerTool(Name = "file_manager")]
-    [Description("Manage local files. Actions: list_dir, read_file, write_file, delete_file, move_file, open_ui")]
+    [Description("Manage local files. Actions: list_dir, read_file, write_file, delete_file, move_file, create_dir, copy_file, get_details, open_ui")]
     public Task<string> ExecuteAsync(FileManagerCommandArgs args, CancellationToken ct)
     {
         return DispatchAsync(args, ct);

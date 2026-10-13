@@ -93,6 +93,126 @@ public class MoveFileActionHandler : IActionHandler<FileManagerCommandArgs>
     }
 }
 
+public class CreateDirActionHandler : IActionHandler<FileManagerCommandArgs>
+{
+    public string ActionName => "create_dir";
+    public string? Validate(FileManagerCommandArgs args) => string.IsNullOrEmpty(args.Path) ? "Path is required." : null;
+
+    public Task<string> HandleAsync(FileManagerCommandArgs args, CancellationToken ct)
+    {
+        try
+        {
+            if (Directory.Exists(args.Path))
+            {
+                return Task.FromResult($"Directory already exists: {args.Path}");
+            }
+            Directory.CreateDirectory(args.Path!);
+            return Task.FromResult($"Directory created successfully at {args.Path}");
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult($"Failed to create directory: {ex.Message}");
+        }
+    }
+}
+
+public class CopyFileActionHandler : IActionHandler<FileManagerCommandArgs>
+{
+    public string ActionName => "copy_file";
+    public string? Validate(FileManagerCommandArgs args)
+    {
+        if (string.IsNullOrEmpty(args.Path)) return "Path is required.";
+        if (string.IsNullOrEmpty(args.DestinationPath)) return "DestinationPath is required.";
+        return null;
+    }
+
+    public Task<string> HandleAsync(FileManagerCommandArgs args, CancellationToken ct)
+    {
+        try
+        {
+            if (File.Exists(args.Path))
+            {
+                var destDir = Path.GetDirectoryName(args.DestinationPath);
+                if (!string.IsNullOrEmpty(destDir) && !Directory.Exists(destDir))
+                {
+                    Directory.CreateDirectory(destDir);
+                }
+                File.Copy(args.Path, args.DestinationPath!, true);
+                return Task.FromResult($"File copied to {args.DestinationPath}");
+            }
+            else if (Directory.Exists(args.Path))
+            {
+                CopyDirectoryRecursive(args.Path, args.DestinationPath!);
+                return Task.FromResult($"Directory copied to {args.DestinationPath}");
+            }
+            return Task.FromResult($"Source path not found: {args.Path}");
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult($"Failed to copy: {ex.Message}");
+        }
+    }
+
+    private static void CopyDirectoryRecursive(string sourceDir, string targetDir)
+    {
+        Directory.CreateDirectory(targetDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            File.Copy(file, Path.Combine(targetDir, Path.GetFileName(file)), true);
+        }
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            CopyDirectoryRecursive(dir, Path.Combine(targetDir, Path.GetFileName(dir)));
+        }
+    }
+}
+
+public class GetDetailsActionHandler : IActionHandler<FileManagerCommandArgs>
+{
+    public string ActionName => "get_details";
+    public string? Validate(FileManagerCommandArgs args) => string.IsNullOrEmpty(args.Path) ? "Path is required." : null;
+
+    public Task<string> HandleAsync(FileManagerCommandArgs args, CancellationToken ct)
+    {
+        try
+        {
+            if (File.Exists(args.Path))
+            {
+                var fi = new FileInfo(args.Path);
+                var details = new
+                {
+                    Name = fi.Name,
+                    Path = fi.FullName,
+                    Type = "File",
+                    Extension = fi.Extension,
+                    SizeBytes = fi.Length,
+                    Created = fi.CreationTimeUtc.ToString("o"),
+                    Modified = fi.LastWriteTimeUtc.ToString("o")
+                };
+                return Task.FromResult(JsonSerializer.Serialize(details, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            else if (Directory.Exists(args.Path))
+            {
+                var di = new DirectoryInfo(args.Path);
+                var details = new
+                {
+                    Name = di.Name,
+                    Path = di.FullName,
+                    Type = "Directory",
+                    Created = di.CreationTimeUtc.ToString("o"),
+                    Modified = di.LastWriteTimeUtc.ToString("o")
+                };
+                return Task.FromResult(JsonSerializer.Serialize(details, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            return Task.FromResult($"Path not found: {args.Path}");
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult($"Failed to get details: {ex.Message}");
+        }
+    }
+}
+
 public class OpenUiActionHandler : IActionHandler<FileManagerCommandArgs>
 {
     public string ActionName => "open_ui";
@@ -111,17 +231,44 @@ public class OpenUiActionHandler : IActionHandler<FileManagerCommandArgs>
         {
             if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd", $"/c start {url}") { CreateNoWindow = true });
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("msedge", $"--app={url}") { UseShellExecute = true });
+                }
+                catch
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd", $"/c start {url}") { CreateNoWindow = true });
+                }
             }
             else if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux))
             {
-                System.Diagnostics.Process.Start("xdg-open", url);
+                try
+                {
+                    System.Diagnostics.Process.Start("google-chrome", $"--app={url}");
+                }
+                catch
+                {
+                    System.Diagnostics.Process.Start("xdg-open", url);
+                }
             }
             else if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX))
             {
-                System.Diagnostics.Process.Start("open", url);
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo("open", $"-na \"Google Chrome\" --args --app={url}") { UseShellExecute = false };
+                    var p = System.Diagnostics.Process.Start(psi);
+                    p?.WaitForExit(1000);
+                    if (p != null && p.ExitCode != 0)
+                    {
+                        System.Diagnostics.Process.Start("open", url);
+                    }
+                }
+                catch
+                {
+                    System.Diagnostics.Process.Start("open", url);
+                }
             }
-            return Task.FromResult($"Successfully forced the external OS browser to open at {url}");
+            return Task.FromResult($"Successfully opened the File Manager UI in clean app mode (without address bar) at {url}");
         }
         catch (Exception ex)
         {
