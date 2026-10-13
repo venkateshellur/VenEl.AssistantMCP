@@ -318,15 +318,27 @@ public static class FileManagerWebApp
             overflow: hidden;
         }
         
-        /* Header / Address Bar */
+        /* Header / Address Bar with Top Stacking Context */
         header {
+            position: relative;
+            z-index: 6000;
             padding: 10px 18px;
-            background: var(--panel-bg);
+            background: #141418;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             gap: 12px;
-            backdrop-filter: blur(10px);
+        }
+        .dropdown-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 5500;
+            background: rgba(0, 0, 0, 0.55);
+            cursor: default;
+            pointer-events: auto !important;
         }
         .nav-buttons {
             display: flex;
@@ -371,6 +383,7 @@ public static class FileManagerWebApp
         .path-bar-container {
             flex-grow: 1;
             position: relative;
+            z-index: 6001;
         }
         .path-bar {
             display: flex;
@@ -410,6 +423,8 @@ public static class FileManagerWebApp
 
         /* Toolbar */
         .toolbar {
+            position: relative;
+            z-index: 100;
             padding: 6px 18px;
             background: rgba(0, 0, 0, 0.2);
             border-bottom: 1px solid var(--border-color);
@@ -453,20 +468,21 @@ public static class FileManagerWebApp
             top: calc(100% + 6px);
             left: 0;
             right: 0;
-            background-color: #1a1a22 !important;
-            background: #1a1a22 !important;
+            background-color: #1c1c24 !important;
+            background: #1c1c24 !important;
             opacity: 1 !important;
-            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            border: 1px solid rgba(255, 255, 255, 0.25) !important;
             border-radius: 8px;
-            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
-            max-height: 380px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.98), 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+            max-height: 420px;
             overflow-y: auto;
-            z-index: 9999 !important;
+            z-index: 6500 !important;
             display: flex;
             flex-direction: column;
             padding: 6px 0;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
+            pointer-events: auto !important;
         }
         .dropdown-section-title {
             font-size: 10px;
@@ -487,9 +503,10 @@ public static class FileManagerWebApp
             color: #f1f2f6 !important;
             background-color: #1a1a22 !important;
             transition: background 0.15s, color 0.15s;
+            pointer-events: auto !important;
         }
         .dropdown-item:hover {
-            background-color: rgba(108, 92, 231, 0.35) !important;
+            background-color: #2d2654 !important;
             color: #ffffff !important;
         }
         .dropdown-item i {
@@ -513,6 +530,8 @@ public static class FileManagerWebApp
 
         /* Main Content Layout */
         .main-content {
+            position: relative;
+            z-index: 10;
             display: flex;
             flex-grow: 1;
             overflow: hidden;
@@ -803,6 +822,9 @@ public static class FileManagerWebApp
     </style>
 </head>
 <body>
+    <!-- Click-Catching Dim Backdrop for Folder Dropdown -->
+    <div id="path-dropdown-backdrop" class="dropdown-backdrop" onclick="closePathDropdown(event)" style="display: none;"></div>
+
     <!-- Top Address & Navigation Bar -->
     <header>
         <div class="nav-buttons">
@@ -814,7 +836,7 @@ public static class FileManagerWebApp
                 <input type="text" id="path" onkeypress="handlePathEnter(event)" placeholder="Enter path or choose location..." autocomplete="off" />
                 <button id="btn-path-dropdown" onclick="togglePathDropdown(event)" title="Browse drives and folders">▾</button>
             </div>
-            <div id="path-dropdown" class="path-dropdown" style="display: none;"></div>
+            <div id="path-dropdown" class="path-dropdown" onclick="event.stopPropagation()" style="display: none;"></div>
         </div>
         <div class="nav-buttons view-toggles">
             <button id="btn-list" onclick="setView('list')" title="List View">☰</button>
@@ -1523,18 +1545,24 @@ public static class FileManagerWebApp
         }
 
         function togglePathDropdown(e) {
-            if (e) e.stopPropagation();
+            if (e && e.stopPropagation) e.stopPropagation();
             const dropdown = document.getElementById('path-dropdown');
+            const backdrop = document.getElementById('path-dropdown-backdrop');
             if (dropdown.style.display === 'none' || !dropdown.style.display) {
                 renderPathDropdown();
                 dropdown.style.display = 'flex';
+                if (backdrop) backdrop.style.display = 'block';
             } else {
-                dropdown.style.display = 'none';
+                closePathDropdown(e);
             }
         }
 
-        function closePathDropdown() {
-            document.getElementById('path-dropdown').style.display = 'none';
+        function closePathDropdown(e) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            const dropdown = document.getElementById('path-dropdown');
+            const backdrop = document.getElementById('path-dropdown-backdrop');
+            if (dropdown) dropdown.style.display = 'none';
+            if (backdrop) backdrop.style.display = 'none';
         }
 
         function renderPathDropdown() {
@@ -1546,7 +1574,7 @@ public static class FileManagerWebApp
                 for (let i = 0; i < systemRoots.length; i++) {
                     const root = systemRoots[i];
                     const icon = root.type === 'Drive' ? '💻' : root.type === 'Home' ? '🏠' : root.type === 'Desktop' ? '🖥️' : '📁';
-                    html += '<div class="dropdown-item" onclick="selectDropdownPath(\'' + escapePath(root.path) + '\')">' +
+                    html += '<div class="dropdown-item" onclick="selectDropdownPath(\'' + escapePath(root.path) + '\', event)">' +
                             '<i>' + icon + '</i>' +
                             '<span>' + escapeHtml(root.name) + '</span>' +
                             '<span class="item-sub">' + escapeHtml(root.path) + '</span>' +
@@ -1562,7 +1590,7 @@ public static class FileManagerWebApp
                     html += '<div class="dropdown-section-title">Folder Hierarchy</div>';
                     
                     const rootPath = isWindows ? (currentPath.slice(0, 3)) : '/';
-                    html += '<div class="dropdown-item" onclick="selectDropdownPath(\'' + escapePath(rootPath) + '\')">' +
+                    html += '<div class="dropdown-item" onclick="selectDropdownPath(\'' + escapePath(rootPath) + '\', event)">' +
                             '<i>📁</i>' +
                             '<span>' + (isWindows ? rootPath : '/ (Root)') + '</span>' +
                             '<span class="item-sub">' + escapeHtml(rootPath) + '</span>' +
@@ -1573,7 +1601,7 @@ public static class FileManagerWebApp
                         if (isWindows && i === 0 && parts[0].endsWith(':')) continue;
                         accum = isWindows ? (accum.endsWith('\\') ? accum + parts[i] : accum + '\\' + parts[i]) : accum + '/' + parts[i];
                         const isCurrent = (accum === currentPath);
-                        html += '<div class="dropdown-item" style="padding-left: ' + ((i + 2) * 12) + 'px; ' + (isCurrent ? 'font-weight: 600; color: #74b9ff;' : '') + '" onclick="selectDropdownPath(\'' + escapePath(accum) + '\')">' +
+                        html += '<div class="dropdown-item" style="padding-left: ' + ((i + 2) * 12) + 'px; ' + (isCurrent ? 'font-weight: 600; color: #74b9ff;' : '') + '" onclick="selectDropdownPath(\'' + escapePath(accum) + '\', event)">' +
                                 '<i>📂</i>' +
                                 '<span>' + escapeHtml(parts[i]) + (isCurrent ? ' (Current)' : '') + '</span>' +
                                 '<span class="item-sub">' + escapeHtml(accum) + '</span>' +
@@ -1585,7 +1613,8 @@ public static class FileManagerWebApp
             dropdown.innerHTML = html;
         }
 
-        function selectDropdownPath(targetPath) {
+        function selectDropdownPath(targetPath, e) {
+            if (e && e.stopPropagation) e.stopPropagation();
             closePathDropdown();
             loadFiles(targetPath);
         }
@@ -1594,6 +1623,16 @@ public static class FileManagerWebApp
             const container = document.querySelector('.path-bar-container');
             if (container && !container.contains(e.target)) {
                 closePathDropdown();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closePathDropdown();
+                hideNewFolderModal();
+                hideNewFileModal();
+                hideRenameModal();
+                hideContextMenu();
             }
         });
 
