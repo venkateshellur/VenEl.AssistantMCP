@@ -1,6 +1,9 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
+using System;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -10,6 +13,12 @@ using Microsoft.Extensions.Logging;
 using VenEl.MCP.FileManager.Configuration;
 
 namespace VenEl.MCP.FileManager.Web;
+
+public record NewFolderRequest(string CurrentPath, string FolderName);
+public record NewFileRequest(string CurrentPath, string FileName, string? Content);
+public record RenameRequest(string OldPath, string NewName);
+public record DeleteRequest(string TargetPath);
+public record CopyMoveRequest(string Source, string DestinationDir);
 
 public static class FileManagerWebApp
 {
@@ -25,14 +34,13 @@ public static class FileManagerWebApp
             serverOptions.ListenAnyIP(options.WebPort);
         });
 
-        // Add services
         builder.Services.AddCors();
 
         _app = builder.Build();
 
         _app.UseCors(b => b.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 
-        // Simple API endpoints that wrap the standard file operations
+        // 1. Directory Listing
         _app.MapGet("/api/files/list", (string? path) => 
         {
             try 
@@ -43,8 +51,18 @@ public static class FileManagerWebApp
                 if (!Directory.Exists(path)) return Results.NotFound("Directory not found.");
                 
                 var absolutePath = Path.GetFullPath(path);
-                var dirs = Directory.GetDirectories(absolutePath).Select(d => new { Name = Path.GetFileName(d), Type = "Directory" });
-                var files = Directory.GetFiles(absolutePath).Select(f => new { Name = Path.GetFileName(f), Type = "File", Size = new FileInfo(f).Length });
+                var dirs = Directory.GetDirectories(absolutePath).Select(d => new { 
+                    Name = Path.GetFileName(d), 
+                    Type = "Directory",
+                    Size = 0L,
+                    Modified = new DirectoryInfo(d).LastWriteTimeUtc.ToString("o")
+                });
+                var files = Directory.GetFiles(absolutePath).Select(f => new { 
+                    Name = Path.GetFileName(f), 
+                    Type = "File", 
+                    Size = new FileInfo(f).Length,
+                    Modified = new FileInfo(f).LastWriteTimeUtc.ToString("o")
+                });
                 
                 return Results.Ok(new { CurrentPath = absolutePath, Items = dirs.Concat<object>(files) });
             }
@@ -54,6 +72,7 @@ public static class FileManagerWebApp
             }
         });
 
+        // 2. Read File Text
         _app.MapGet("/api/files/read", async (string path) => 
         {
             try
@@ -68,6 +87,7 @@ public static class FileManagerWebApp
             }
         });
 
+        // 3. Raw File Stream
         _app.MapGet("/api/files/raw", (string path) => 
         {
             if (!File.Exists(path)) return Results.NotFound("File not found.");
@@ -83,6 +103,7 @@ public static class FileManagerWebApp
             return Results.File(path, mimeType);
         });
 
+        // 4. Roots / Drives
         _app.MapGet("/api/files/roots", () => 
         {
             var roots = new List<object>();
@@ -99,7 +120,7 @@ public static class FileManagerWebApp
                         var label = string.IsNullOrWhiteSpace(drive.VolumeLabel) ? drive.Name : $"{drive.Name} ({drive.VolumeLabel})";
                         roots.Add(new { 
                             name = label, 
-                            path = path,
+                            path = path, 
                             type = "Drive"
                         });
                     }
@@ -128,10 +149,124 @@ public static class FileManagerWebApp
             return Results.Ok(roots);
         });
 
-        // UI Dashboard
+        // 5. New Folder
+        _app.MapPost("/api/files/newFolder", (NewFolderRequest req) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.CurrentPath) || string.IsNullOrWhiteSpace(req.FolderName))
+                return Results.BadRequest("CurrentPath and FolderName are required.");
+            var target = Path.Combine(req.CurrentPath, req.FolderName);
+            Directory.CreateDirectory(target);
+            return Results.Ok(new { success = true, path = target });
+        });
+
+        // 6. New File
+        _app.MapPost("/api/files/newFile", async (NewFileRequest req) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.CurrentPath) || string.IsNullOrWhiteSpace(req.FileName))
+                return Results.BadRequest("CurrentPath and FileName are required.");
+            var target = Path.Combine(req.CurrentPath, req.FileName);
+            await File.WriteAllTextAsync(target, req.Content ?? "");
+            return Results.Ok(new { success = true, path = target });
+        });
+
+        // 7. Rename
+        _app.MapPost("/api/files/rename", (RenameRequest req) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.OldPath) || string.IsNullOrWhiteSpace(req.NewName))
+                return Results.BadRequest("OldPath and NewName are required.");
+            var dir = Path.GetDirectoryName(req.OldPath);
+            if (dir == null) return Results.BadRequest("Invalid old path.");
+            var target = Path.Combine(dir, req.NewName);
+            if (File.Exists(req.OldPath)) File.Move(req.OldPath, target, true);
+            else if (Directory.Exists(req.OldPath)) Directory.Move(req.OldPath, target);
+            else return Results.NotFound("Path not found.");
+            return Results.Ok(new { success = true, path = target });
+        });
+
+        // 8. Delete
+        _app.MapPost("/api/files/delete", (DeleteRequest req) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.TargetPath))
+                return Results.BadRequest("TargetPath is required.");
+            if (File.Exists(req.TargetPath)) File.Delete(req.TargetPath);
+            else if (Directory.Exists(req.TargetPath)) Directory.Delete(req.TargetPath, true);
+            else return Results.NotFound("Path not found.");
+            return Results.Ok(new { success = true });
+        });
+
+        // 9. Copy
+        _app.MapPost("/api/files/copy", (CopyMoveRequest req) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Source) || string.IsNullOrWhiteSpace(req.DestinationDir))
+                return Results.BadRequest("Source and DestinationDir are required.");
+            var name = Path.GetFileName(req.Source);
+            var dest = Path.Combine(req.DestinationDir, name);
+            if (File.Exists(req.Source))
+            {
+                if (File.Exists(dest) && Path.GetDirectoryName(req.Source) == req.DestinationDir)
+                {
+                    var ext = Path.GetExtension(name);
+                    var nameNoExt = Path.GetFileNameWithoutExtension(name);
+                    dest = Path.Combine(req.DestinationDir, $"{nameNoExt} - Copy{ext}");
+                }
+                File.Copy(req.Source, dest, true);
+            }
+            else if (Directory.Exists(req.Source))
+            {
+                CopyDirectory(req.Source, dest);
+            }
+            else return Results.NotFound("Source not found.");
+            return Results.Ok(new { success = true, path = dest });
+        });
+
+        // 10. Move
+        _app.MapPost("/api/files/move", (CopyMoveRequest req) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Source) || string.IsNullOrWhiteSpace(req.DestinationDir))
+                return Results.BadRequest("Source and DestinationDir are required.");
+            var name = Path.GetFileName(req.Source);
+            var dest = Path.Combine(req.DestinationDir, name);
+            if (File.Exists(req.Source)) File.Move(req.Source, dest, true);
+            else if (Directory.Exists(req.Source)) Directory.Move(req.Source, dest);
+            else return Results.NotFound("Source not found.");
+            return Results.Ok(new { success = true, path = dest });
+        });
+
+        // 11. Details
+        _app.MapGet("/api/files/details", (string path) =>
+        {
+            if (File.Exists(path))
+            {
+                var fi = new FileInfo(path);
+                return Results.Ok(new { name = fi.Name, path = fi.FullName, isDirectory = false, size = fi.Length, modified = fi.LastWriteTimeUtc });
+            }
+            if (Directory.Exists(path))
+            {
+                var di = new DirectoryInfo(path);
+                return Results.Ok(new { name = di.Name, path = di.FullName, isDirectory = true, size = 0L, modified = di.LastWriteTimeUtc });
+            }
+            return Results.NotFound();
+        });
+
+        // 12. UI Dashboard
         _app.MapGet("/", () => Results.Content(GetIndexHtml(), "text/html"));
 
         await _app.StartAsync(ct);
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var target = Path.Combine(destDir, Path.GetFileName(file));
+            File.Copy(file, target, true);
+        }
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            var target = Path.Combine(destDir, Path.GetFileName(dir));
+            CopyDirectory(dir, target);
+        }
     }
 
     public static async Task StopAsync()
@@ -146,607 +281,1321 @@ public static class FileManagerWebApp
 
     private static string GetIndexHtml()
     {
-        return """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>VenEl File Manager</title>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-            <style>
-                :root {
-                    --bg-color: #121214;
-                    --panel-bg: rgba(255, 255, 255, 0.03);
-                    --border-color: rgba(255, 255, 255, 0.1);
-                    --text-main: #e0e0e0;
-                    --text-muted: #888;
-                    --accent: #6c5ce7;
-                    --accent-hover: #8172fa;
-                    --hover-bg: rgba(255, 255, 255, 0.08);
-                }
-                * { box-sizing: border-box; margin: 0; padding: 0; }
-                body {
-                    font-family: 'Inter', sans-serif;
-                    background-color: var(--bg-color);
-                    color: var(--text-main);
-                    height: 100vh;
-                    display: flex;
-                    flex-direction: column;
-                }
-                header {
-                    padding: 15px 24px;
-                    background: var(--panel-bg);
-                    border-bottom: 1px solid var(--border-color);
-                    backdrop-filter: blur(10px);
-                    display: flex;
-                    align-items: center;
-                    gap: 15px;
-                }
-                .nav-buttons button {
-                    background: transparent;
-                    border: 1px solid var(--border-color);
-                    color: var(--text-main);
-                    padding: 8px 12px;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    transition: 0.2s;
-                }
-                .nav-buttons button:hover { background: var(--hover-bg); }
-                .nav-buttons button.active {
-                    background: var(--accent);
-                    border-color: var(--accent);
-                }
-                .path-bar-container {
-                    flex-grow: 1;
-                    position: relative;
-                }
-                .path-bar {
-                    display: flex;
-                    align-items: center;
-                    background: var(--bg-color);
-                    border: 1px solid var(--border-color);
-                    border-radius: 6px;
-                    padding: 0 4px 0 10px;
-                    transition: border-color 0.2s, box-shadow 0.2s;
-                }
-                .path-bar:focus-within {
-                    border-color: var(--accent);
-                    box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
-                }
-                #path {
-                    width: 100%;
-                    background: transparent;
-                    border: none;
-                    color: var(--text-main);
-                    padding: 9px 0;
-                    font-size: 13px;
-                    outline: none;
-                    font-family: inherit;
-                }
-                #btn-path-dropdown {
-                    background: transparent;
-                    border: none;
-                    color: var(--text-muted);
-                    padding: 6px 8px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 11px;
-                    line-height: 1;
-                    transition: 0.15s;
-                }
-                #btn-path-dropdown:hover {
-                    background: var(--hover-bg);
-                    color: var(--text-main);
-                }
-                .path-dropdown {
-                    position: absolute;
-                    top: calc(100% + 6px);
-                    left: 0;
-                    right: 0;
-                    background: #18181c;
-                    border: 1px solid var(--border-color);
-                    border-radius: 8px;
-                    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
-                    max-height: 380px;
-                    overflow-y: auto;
-                    z-index: 1000;
-                    display: flex;
-                    flex-direction: column;
-                    padding: 6px 0;
-                }
-                .dropdown-section-title {
-                    font-size: 10px;
-                    font-weight: 700;
-                    text-transform: uppercase;
-                    letter-spacing: 0.8px;
-                    color: var(--text-muted);
-                    padding: 8px 14px 4px;
-                }
-                .dropdown-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    padding: 8px 14px;
-                    cursor: pointer;
-                    font-size: 13px;
-                    color: var(--text-main);
-                    transition: background 0.15s;
-                }
-                .dropdown-item:hover {
-                    background: var(--hover-bg);
-                }
-                .dropdown-item i {
-                    font-style: normal;
-                    font-size: 16px;
-                }
-                .dropdown-item .item-sub {
-                    color: var(--text-muted);
-                    font-size: 11px;
-                    margin-left: auto;
-                    max-width: 50%;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                }
-                .dropdown-divider {
-                    height: 1px;
-                    background: var(--border-color);
-                    margin: 6px 0;
-                }
-                .main-content {
-                    display: flex;
-                    flex-grow: 1;
-                    overflow: hidden;
-                }
-                .file-list-container {
-                    flex-grow: 1;
-                    overflow-y: auto;
-                    padding: 10px 20px;
-                }
-                .preview-pane {
-                    width: 350px;
-                    background: var(--panel-bg);
-                    border-left: 1px solid var(--border-color);
-                    padding: 20px;
-                    display: flex;
-                    flex-direction: column;
-                    overflow-y: auto;
-                }
-                .preview-pane h2 {
-                    font-size: 16px;
-                    font-weight: 600;
-                    margin-bottom: 15px;
-                    color: var(--accent);
-                    word-break: break-all;
-                }
-                .preview-content {
-                    flex-grow: 1;
-                    color: var(--text-muted);
-                    font-size: 13px;
-                }
-                .preview-content pre {
-                    background: rgba(0,0,0,0.3);
-                    padding: 10px;
-                    border-radius: 6px;
-                    overflow-x: auto;
-                    color: #a8b2d1;
-                    white-space: pre-wrap;
-                }
-                .preview-content img {
-                    max-width: 100%;
-                    border-radius: 6px;
-                    margin-top: 10px;
-                }
-                
-                /* List View (Default) */
-                #files.list-view {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 5px;
-                }
-                #files.list-view .item {
-                    display: grid;
-                    grid-template-columns: auto 1fr auto;
-                    align-items: center;
-                    gap: 15px;
-                    padding: 12px 15px;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    transition: background 0.15s ease;
-                    user-select: none;
-                }
-                #files.list-view .item i { font-style: normal; font-size: 20px; }
-                #files.list-view .item-size { color: var(--text-muted); font-size: 12px; }
-                
-                /* Grid View */
-                #files.grid-view {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-                    gap: 15px;
-                }
-                #files.grid-view .item {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    text-align: center;
-                    gap: 10px;
-                    padding: 20px 10px;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    transition: background 0.15s ease;
-                    user-select: none;
-                    background: var(--panel-bg);
-                    border: 1px solid transparent;
-                }
-                #files.grid-view .item:hover {
-                    border-color: var(--border-color);
-                }
-                #files.grid-view .item i { font-style: normal; font-size: 40px; }
-                #files.grid-view .item-size { display: none; }
-                #files.grid-view .item-name { 
-                    word-break: break-all;
-                    display: -webkit-box;
-                    -webkit-line-clamp: 2;
-                    -webkit-box-orient: vertical;
-                    overflow: hidden;
-                }
+        return """"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VenEl File Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #121214;
+            --panel-bg: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-main: #e0e0e0;
+            --text-muted: #888;
+            --accent: #6c5ce7;
+            --accent-hover: #8172fa;
+            --accent-gradient: linear-gradient(135deg, #6c5ce7 0%, #00cec9 100%);
+            --danger: #eb4d4b;
+            --danger-hover: #ff7675;
+            --hover-bg: rgba(255, 255, 255, 0.08);
+            --active-bg: rgba(108, 92, 231, 0.22);
+            --active-border: #6c5ce7;
+            --modal-bg: #1c1c21;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+            overflow: hidden;
+        }
+        
+        /* Header / Address Bar */
+        header {
+            padding: 10px 18px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            backdrop-filter: blur(10px);
+        }
+        .nav-buttons {
+            display: flex;
+            gap: 6px;
+        }
+        .nav-buttons button, .tool-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+        .nav-buttons button:hover, .tool-btn:hover:not(:disabled) {
+            background: var(--hover-bg);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        .tool-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .tool-btn.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            font-weight: 500;
+        }
+        .tool-btn.primary:hover {
+            background: var(--accent-hover);
+        }
+        .nav-buttons button.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
 
-                .item:hover { background: var(--hover-bg); }
-                .item-name { font-weight: 500; font-size: 14px; }
-                .folder .item-name { color: #74b9ff; }
-                .file .item-name { color: #dfe6e9; }
-                
-                /* Animations */
-                .item { animation: fadeIn 0.3s ease; }
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(5px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-            </style>
-        </head>
-        <body>
-            <header>
-                <div class="nav-buttons">
-                    <button onclick="goUp()" title="Go Up One Level">⬆ Up</button>
-                    <button onclick="goHome()" title="Go Home">🏠 Home</button>
-                </div>
-                <div class="path-bar-container">
-                    <div class="path-bar">
-                        <input type="text" id="path" onkeypress="handlePathEnter(event)" placeholder="Enter path or choose location..." autocomplete="off" />
-                        <button id="btn-path-dropdown" onclick="togglePathDropdown(event)" title="Browse drives and folders">▾</button>
-                    </div>
-                    <div id="path-dropdown" class="path-dropdown" style="display: none;"></div>
-                </div>
-                <div class="nav-buttons view-toggles">
-                    <button id="btn-list" onclick="setView('list')" title="List View">☰</button>
-                    <button id="btn-grid" onclick="setView('grid')" class="active" title="Grid View">⊞</button>
-                    <button id="btn-preview" onclick="togglePreview()" class="active" title="Toggle Preview Pane" style="margin-left: 10px;">👁</button>
-                </div>
-            </header>
-            <div class="search-bar-container" style="padding: 10px 24px; background: var(--bg-color); border-bottom: 1px solid var(--border-color);">
-                <input type="text" id="search" placeholder="🔍 Search in current folder..." onkeyup="handleSearch()" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--panel-bg); color: var(--text-main); outline: none;" />
+        .path-bar-container {
+            flex-grow: 1;
+            position: relative;
+        }
+        .path-bar {
+            display: flex;
+            align-items: center;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0 4px 0 10px;
+            transition: border-color 0.2s;
+        }
+        .path-bar:focus-within {
+            border-color: var(--accent);
+        }
+        #path {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            padding: 7px 0;
+            font-size: 13px;
+            outline: none;
+            font-family: inherit;
+        }
+        #btn-path-dropdown {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        #btn-path-dropdown:hover {
+            background: var(--hover-bg);
+            color: var(--text-main);
+        }
+
+        /* Toolbar */
+        .toolbar {
+            padding: 6px 18px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .toolbar-divider {
+            width: 1px;
+            height: 18px;
+            background: var(--border-color);
+            margin: 0 4px;
+        }
+
+        /* Search bar */
+        .search-input {
+            width: 220px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--panel-bg);
+            color: var(--text-main);
+            outline: none;
+            font-size: 12px;
+            transition: border-color 0.2s, width 0.2s;
+        }
+        .search-input:focus {
+            border-color: var(--accent);
+            width: 280px;
+        }
+
+        /* Dropdown */
+        .path-dropdown {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: #18181c;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 14px 35px rgba(0, 0, 0, 0.7);
+            max-height: 380px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            padding: 6px 0;
+        }
+        .dropdown-section-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            padding: 8px 14px 4px;
+        }
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 14px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text-main);
+            transition: background 0.15s;
+        }
+        .dropdown-item:hover {
+            background: var(--hover-bg);
+        }
+        .dropdown-item i {
+            font-style: normal;
+            font-size: 16px;
+        }
+        .dropdown-item .item-sub {
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-left: auto;
+            max-width: 50%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .dropdown-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 6px 0;
+        }
+
+        /* Main Content Layout */
+        .main-content {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+        .file-list-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 14px 18px;
+            position: relative;
+        }
+        .preview-pane {
+            width: 340px;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--border-color);
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .preview-pane h2 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--accent);
+            word-break: break-all;
+        }
+        .preview-content {
+            flex-grow: 1;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .preview-content pre {
+            background: rgba(0,0,0,0.35);
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+            color: #a8b2d1;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+        }
+        .preview-content img {
+            max-width: 100%;
+            border-radius: 6px;
+            margin-top: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        /* Items in Grid View */
+        #files.grid-view {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+            gap: 12px;
+        }
+        #files.grid-view .item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 8px;
+            padding: 14px 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            background: var(--panel-bg);
+            border: 1px solid transparent;
+            position: relative;
+        }
+        #files.grid-view .item:hover {
+            border-color: var(--border-color);
+            background: var(--hover-bg);
+            transform: translateY(-2px);
+        }
+        #files.grid-view .item.selected {
+            background: var(--active-bg);
+            border-color: var(--active-border);
+            box-shadow: 0 0 10px rgba(108, 92, 231, 0.3);
+        }
+        #files.grid-view .item.cut-item {
+            opacity: 0.5;
+            filter: grayscale(0.5);
+        }
+        #files.grid-view .item i { font-style: normal; font-size: 38px; }
+        #files.grid-view .item-size { display: none; }
+        #files.grid-view .item-name { 
+            word-break: break-all;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* Items in List View */
+        #files.list-view {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        #files.list-view .item {
+            display: grid;
+            grid-template-columns: auto 1fr auto auto;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+            border: 1px solid transparent;
+        }
+        #files.list-view .item:hover { background: var(--hover-bg); }
+        #files.list-view .item.selected {
+            background: var(--active-bg);
+            border-color: var(--active-border);
+        }
+        #files.list-view .item.cut-item { opacity: 0.5; }
+        #files.list-view .item i { font-style: normal; font-size: 18px; }
+        #files.list-view .item-size { color: var(--text-muted); font-size: 11px; }
+        #files.list-view .item-name { font-size: 13px; font-weight: 500; }
+        
+        .folder .item-name { color: #74b9ff; }
+        .file .item-name { color: #dfe6e9; }
+
+        /* Context Menu */
+        .context-menu {
+            position: fixed;
+            background: rgba(24, 24, 28, 0.95);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+            min-width: 180px;
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            padding: 5px 0;
+        }
+        .context-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 14px;
+            font-size: 12px;
+            cursor: pointer;
+            color: var(--text-main);
+            transition: background 0.12s;
+        }
+        .context-item:hover {
+            background: var(--hover-bg);
+            color: #fff;
+        }
+        .context-item.danger:hover {
+            background: rgba(235, 77, 75, 0.2);
+            color: #ff7675;
+        }
+        .context-item i { font-style: normal; width: 16px; text-align: center; }
+        .context-item .shortcut {
+            margin-left: auto;
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+        .context-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 4px 0;
+        }
+
+        /* Modal Dialog */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+        }
+        .modal-box {
+            background: var(--modal-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 24px;
+            width: 380px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            animation: modalFade 0.15s ease-out;
+        }
+        @keyframes modalFade {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .modal-input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-main);
+            font-size: 13px;
+            outline: none;
+        }
+        .modal-input:focus {
+            border-color: var(--accent);
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .modal-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-main);
+            font-size: 12px;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .modal-btn:hover { background: var(--hover-bg); }
+        .modal-btn.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .modal-btn.primary:hover { background: var(--accent-hover); }
+        .modal-btn.danger {
+            background: var(--danger);
+            border-color: var(--danger);
+            color: #fff;
+        }
+        .modal-btn.danger:hover { background: var(--danger-hover); }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 4000;
+        }
+        .toast {
+            background: rgba(28, 28, 33, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: toastIn 0.2s ease;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Status bar */
+        .status-bar {
+            padding: 6px 18px;
+            background: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Address & Navigation Bar -->
+    <header>
+        <div class="nav-buttons">
+            <button onclick="goUp()" title="Go Up One Level">⬆ Up</button>
+            <button onclick="goHome()" title="Go to Home Folder">🏠 Home</button>
+        </div>
+        <div class="path-bar-container">
+            <div class="path-bar">
+                <input type="text" id="path" onkeypress="handlePathEnter(event)" placeholder="Enter path or choose location..." autocomplete="off" />
+                <button id="btn-path-dropdown" onclick="togglePathDropdown(event)" title="Browse drives and folders">▾</button>
             </div>
-            <div class="main-content">
-                <div class="file-list-container">
-                    <div id="files" class="grid-view"></div>
-                </div>
-                <div class="preview-pane" id="preview-pane">
-                    <h2>Preview</h2>
-                    <div class="preview-content" id="preview-content">
-                        Select a file to preview.
-                    </div>
-                </div>
+            <div id="path-dropdown" class="path-dropdown" style="display: none;"></div>
+        </div>
+        <div class="nav-buttons view-toggles">
+            <button id="btn-list" onclick="setView('list')" title="List View">☰</button>
+            <button id="btn-grid" onclick="setView('grid')" class="active" title="Grid View">⊞</button>
+            <button id="btn-preview" onclick="togglePreview()" class="active" title="Toggle Preview Pane">👁</button>
+        </div>
+    </header>
+
+    <!-- CRUD Action Toolbar -->
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <button class="tool-btn primary" onclick="showNewFolderModal()">
+                <i>📁</i> New Folder
+            </button>
+            <button class="tool-btn" onclick="showNewFileModal()">
+                <i>📄</i> New File
+            </button>
+            <div class="toolbar-divider"></div>
+            <button class="tool-btn" id="btn-cut" onclick="cutSelectedItem()" disabled title="Cut (Ctrl+X)">
+                <i>✂️</i> Cut
+            </button>
+            <button class="tool-btn" id="btn-copy" onclick="copySelectedItem()" disabled title="Copy (Ctrl+C)">
+                <i>📋</i> Copy
+            </button>
+            <button class="tool-btn" id="btn-paste" onclick="pasteClipboardItem()" disabled title="Paste (Ctrl+V)">
+                <i>📥</i> Paste
+            </button>
+            <div class="toolbar-divider"></div>
+            <button class="tool-btn" id="btn-rename" onclick="renameSelectedItem()" disabled title="Rename (F2)">
+                <i>✏️</i> Rename
+            </button>
+            <button class="tool-btn" id="btn-delete" onclick="deleteSelectedItem()" disabled title="Delete (Del)" style="color: var(--danger);">
+                <i>🗑️</i> Delete
+            </button>
+            <div class="toolbar-divider"></div>
+            <button class="tool-btn" onclick="refreshCurrentFolder()" title="Refresh">
+                <i>🔄</i> Refresh
+            </button>
+        </div>
+
+        <div class="toolbar-group">
+            <input type="text" id="search" class="search-input" placeholder="🔍 Search folder..." onkeyup="handleSearch()" />
+        </div>
+    </div>
+
+    <!-- Main Explorer Area -->
+    <div class="main-content">
+        <div class="file-list-container" id="file-list-container" onclick="handleContainerClick(event)" oncontextmenu="handleBackgroundContextMenu(event)">
+            <div id="files" class="grid-view"></div>
+        </div>
+        <div class="preview-pane" id="preview-pane">
+            <h2>Preview</h2>
+            <div class="preview-content" id="preview-content">
+                Select a file to preview.<br><br>💡 Double-click any file to open it in VS Code!
             </div>
+        </div>
+    </div>
 
-            <script>
-                let currentPath = ".";
-                let isWindows = false;
-                let currentView = "grid";
-                let previewVisible = true;
-                let currentItems = [];
+    <!-- Bottom Status Bar -->
+    <div class="status-bar">
+        <span id="status-items-count">0 items</span>
+        <span id="status-selected-info">No selection</span>
+    </div>
 
-                function setView(view) {
-                    currentView = view;
-                    const filesContainer = document.getElementById('files');
-                    if (view === 'grid') {
-                        filesContainer.className = 'grid-view';
-                        document.getElementById('btn-grid').classList.add('active');
-                        document.getElementById('btn-list').classList.remove('active');
-                    } else {
-                        filesContainer.className = 'list-view';
-                        document.getElementById('btn-list').classList.add('active');
-                        document.getElementById('btn-grid').classList.remove('active');
-                    }
+    <!-- Right Click Context Menu -->
+    <div id="context-menu" class="context-menu">
+        <div class="context-item" id="ctx-open" onclick="openSelectedItemInEditor()">
+            <i>🚀</i> Open in VS Code
+        </div>
+        <div class="context-divider" id="ctx-div-1"></div>
+        <div class="context-item" id="ctx-rename" onclick="renameSelectedItem()">
+            <i>✏️</i> Rename <span class="shortcut">F2</span>
+        </div>
+        <div class="context-item" id="ctx-copy" onclick="copySelectedItem()">
+            <i>📋</i> Copy <span class="shortcut">Ctrl+C</span>
+        </div>
+        <div class="context-item" id="ctx-cut" onclick="cutSelectedItem()">
+            <i>✂️</i> Cut <span class="shortcut">Ctrl+X</span>
+        </div>
+        <div class="context-item" id="ctx-paste" onclick="pasteClipboardItem()">
+            <i>📥</i> Paste <span class="shortcut">Ctrl+V</span>
+        </div>
+        <div class="context-divider"></div>
+        <div class="context-item" id="ctx-new-folder" onclick="showNewFolderModal()">
+            <i>📁</i> New Folder
+        </div>
+        <div class="context-item" id="ctx-new-file" onclick="showNewFileModal()">
+            <i>📄</i> New File
+        </div>
+        <div class="context-divider" id="ctx-div-2"></div>
+        <div class="context-item danger" id="ctx-delete" onclick="deleteSelectedItem()">
+            <i>🗑️</i> Delete <span class="shortcut">Del</span>
+        </div>
+        <div class="context-divider" id="ctx-div-3"></div>
+        <div class="context-item" id="ctx-properties" onclick="showPropertiesModal()">
+            <i>ℹ️</i> Properties
+        </div>
+    </div>
+
+    <!-- Modal Dialogs -->
+    <div id="modal-overlay" class="modal-overlay" onclick="handleModalOverlayClick(event)">
+        <div class="modal-box" id="modal-box" onclick="event.stopPropagation()">
+            <div class="modal-title" id="modal-title">Title</div>
+            <div id="modal-body"></div>
+            <div class="modal-actions" id="modal-actions"></div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script>
+        let currentPath = ".";
+        let isWindows = false;
+        let currentView = "grid";
+        let previewVisible = true;
+        let currentItems = [];
+        let selectedItem = null;
+        let clipboard = null; // { action: 'copy'|'cut', path: string, name: string }
+
+        function showToast(message, icon) {
+            icon = icon || 'ℹ️';
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = '<span>' + icon + '</span> <span>' + message + '</span>';
+            container.appendChild(toast);
+            setTimeout(function() {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s ease';
+                setTimeout(function() { toast.remove(); }, 300);
+            }, 3000);
+        }
+
+        function setView(view) {
+            currentView = view;
+            const filesContainer = document.getElementById('files');
+            if (view === 'grid') {
+                filesContainer.className = 'grid-view';
+                document.getElementById('btn-grid').classList.add('active');
+                document.getElementById('btn-list').classList.remove('active');
+            } else {
+                filesContainer.className = 'list-view';
+                document.getElementById('btn-list').classList.add('active');
+                document.getElementById('btn-grid').classList.remove('active');
+            }
+        }
+
+        function togglePreview() {
+            previewVisible = !previewVisible;
+            const pane = document.getElementById('preview-pane');
+            const btn = document.getElementById('btn-preview');
+            if (previewVisible) {
+                pane.style.display = 'flex';
+                btn.classList.add('active');
+            } else {
+                pane.style.display = 'none';
+                btn.classList.remove('active');
+            }
+        }
+
+        function handleSearch() {
+            const q = document.getElementById('search').value.toLowerCase();
+            const filtered = currentItems.filter(function(i) { return i.name.toLowerCase().includes(q); });
+            renderItems(filtered);
+        }
+
+        function renderItems(items) {
+            let html = '';
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const isDir = item.type === 'Directory';
+                const icon = isDir ? '📁' : '📄';
+                const className = isDir ? 'folder' : 'file';
+                const sizeText = !isDir ? formatBytes(item.size) : '';
+                const isSelected = selectedItem && selectedItem.name === item.name;
+                const isCut = clipboard && clipboard.action === 'cut' && clipboard.name === item.name;
+                
+                html += '<div class="item ' + className + (isSelected ? ' selected' : '') + (isCut ? ' cut-item' : '') + '" ' +
+                        'onclick="handleItemClick(event, \'' + escapePath(item.name) + '\', ' + isDir + ')" ' +
+                        'ondblclick="handleDoubleClick(\'' + escapePath(item.name) + '\', ' + isDir + ')" ' +
+                        'oncontextmenu="handleItemContextMenu(event, \'' + escapePath(item.name) + '\', ' + isDir + ')">' +
+                        '<i>' + icon + '</i>' +
+                        '<span class="item-name">' + escapeHtml(item.name) + '</span>' +
+                        '<span class="item-size">' + sizeText + '</span>' +
+                        '</div>';
+            }
+            document.getElementById('files').innerHTML = html;
+            updateSelectionState();
+            document.getElementById('status-items-count').innerText = items.length + ' item' + (items.length === 1 ? '' : 's');
+        }
+
+        async function loadFiles(targetPath) {
+            try {
+                const res = await fetch('/api/files/list?path=' + encodeURIComponent(targetPath));
+                if (!res.ok) {
+                    showToast('Access denied or folder not found', '⚠️');
+                    return;
                 }
+                const data = await res.json();
+                currentPath = data.currentPath;
+                document.getElementById('path').value = currentPath;
+                isWindows = currentPath.includes('\\');
+                currentItems = data.items;
+                selectedItem = null;
+                
+                document.getElementById('search').value = '';
+                renderItems(currentItems);
+                
+                document.getElementById('preview-content').innerHTML = 'Select a file to preview.<br><br>💡 Double-click any file to open it in VS Code!';
+                document.querySelector('#preview-pane h2').innerText = 'Preview';
+            } catch (err) {
+                console.error(err);
+                showToast('Failed to load directory', '❌');
+            }
+        }
 
-                function togglePreview() {
-                    previewVisible = !previewVisible;
-                    const pane = document.getElementById('preview-pane');
-                    const btn = document.getElementById('btn-preview');
-                    if (previewVisible) {
-                        pane.style.display = 'flex';
-                        btn.classList.add('active');
-                    } else {
-                        pane.style.display = 'none';
-                        btn.classList.remove('active');
-                    }
-                }
+        function refreshCurrentFolder() {
+            loadFiles(currentPath);
+            showToast('Refreshed', '🔄');
+        }
 
-                function handleSearch() {
-                    const q = document.getElementById('search').value.toLowerCase();
-                    const filtered = currentItems.filter(i => i.name.toLowerCase().includes(q));
-                    renderItems(filtered);
-                }
+        function handleContainerClick(e) {
+            if (e.target.id === 'file-list-container' || e.target.id === 'files') {
+                selectedItem = null;
+                updateSelectionState();
+                document.querySelectorAll('.item.selected').forEach(function(el) { el.classList.remove('selected'); });
+            }
+        }
 
-                function renderItems(items) {
-                    let html = '';
-                    for (const item of items) {
-                        const isDir = item.type === 'Directory';
-                        const icon = isDir ? '📁' : '📄';
-                        const className = isDir ? 'folder' : 'file';
-                        const sizeText = !isDir ? formatBytes(item.size) : '';
-                        
-                        html += `
-                            <div class="item ${className}" onclick="handleSingleClick('${item.name}', ${isDir})" ondblclick="handleDoubleClick('${item.name}', ${isDir})">
-                                <i>${icon}</i>
-                                <span class="item-name">${item.name}</span>
-                                <span class="item-size">${sizeText}</span>
-                            </div>
-                        `;
-                    }
-                    document.getElementById('files').innerHTML = html;
-                }
+        function handleItemClick(e, name, isDir) {
+            e.stopPropagation();
+            selectedItem = currentItems.find(function(i) { return i.name === name; }) || { name: name, type: isDir ? 'Directory' : 'File' };
+            
+            document.querySelectorAll('.item.selected').forEach(function(el) { el.classList.remove('selected'); });
+            const targetEl = e.currentTarget;
+            if (targetEl) targetEl.classList.add('selected');
+            
+            updateSelectionState();
+            handlePreview(name, isDir);
+        }
 
-                async function loadFiles(targetPath) {
-                    try {
-                        const res = await fetch('/api/files/list?path=' + encodeURIComponent(targetPath));
-                        if (!res.ok) {
-                            alert('Error loading directory: Access Denied or Not Found');
-                            return;
-                        }
-                        const data = await res.json();
-                        currentPath = data.currentPath;
-                        document.getElementById('path').value = currentPath;
-                        isWindows = currentPath.includes('\\');
-                        currentItems = data.items;
-                        
-                        document.getElementById('search').value = ''; // clear search
-                        renderItems(currentItems);
-                        
-                        document.getElementById('preview-content').innerHTML = 'Select a file to preview.';
-                        document.querySelector('#preview-pane h2').innerText = 'Preview';
-                    } catch (err) {
-                        console.error(err);
-                    }
-                }
+        function updateSelectionState() {
+            const hasSelection = !!selectedItem;
+            document.getElementById('btn-cut').disabled = !hasSelection;
+            document.getElementById('btn-copy').disabled = !hasSelection;
+            document.getElementById('btn-rename').disabled = !hasSelection;
+            document.getElementById('btn-delete').disabled = !hasSelection;
+            document.getElementById('btn-paste').disabled = !clipboard;
 
-                async function handleSingleClick(name, isDir) {
-                    const sep = isWindows ? '\\' : '/';
-                    const fullPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
-                    
-                    document.querySelector('#preview-pane h2').innerText = name;
-                    const previewContent = document.getElementById('preview-content');
+            const selectedInfo = document.getElementById('status-selected-info');
+            if (selectedItem) {
+                selectedInfo.innerText = 'Selected: ' + selectedItem.name + (selectedItem.type === 'File' ? ' (' + formatBytes(selectedItem.size) + ')' : '');
+            } else {
+                selectedInfo.innerText = 'No selection';
+            }
+        }
 
-                    if (isDir) {
-                        previewContent.innerHTML = 'Folder selected.<br><br>Double-click to open.';
+        async function handlePreview(name, isDir) {
+            const sep = isWindows ? '\\' : '/';
+            const fullPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
+            
+            document.querySelector('#preview-pane h2').innerText = name;
+            const previewContent = document.getElementById('preview-content');
+
+            if (isDir) {
+                previewContent.innerHTML = 'Folder selected.<br><br>Double-click to open.';
+                return;
+            }
+
+            const ext = name.split('.').pop().toLowerCase();
+            const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+            const textExts = ['txt', 'md', 'json', 'cs', 'js', 'ts', 'html', 'css', 'xml', 'log', 'yaml', 'yml', 'sh', 'bat', 'sql', 'py'];
+
+            previewContent.innerHTML = 'Loading preview...';
+
+            if (imageExts.includes(ext)) {
+                previewContent.innerHTML = '<img src="/api/files/raw?path=' + encodeURIComponent(fullPath) + '" alt="preview" />';
+            } else if (textExts.includes(ext)) {
+                try {
+                    const res = await fetch('/api/files/read?path=' + encodeURIComponent(fullPath));
+                    if (!res.ok) {
+                        previewContent.innerHTML = 'File too large or unreadable.';
                         return;
                     }
-
-                    const ext = name.split('.').pop().toLowerCase();
-                    const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
-                    const textExts = ['txt', 'md', 'json', 'cs', 'js', 'html', 'css', 'xml', 'log', 'yaml', 'yml', 'sh', 'bat'];
-
-                    previewContent.innerHTML = 'Loading preview...';
-
-                    if (imageExts.includes(ext)) {
-                        previewContent.innerHTML = `<img src="/api/files/raw?path=${encodeURIComponent(fullPath)}" alt="preview" />`;
-                    } else if (textExts.includes(ext)) {
-                        try {
-                            const res = await fetch('/api/files/read?path=' + encodeURIComponent(fullPath));
-                            if (!res.ok) {
-                                previewContent.innerHTML = 'File too large or unreadable.';
-                                return;
-                            }
-                            const text = await res.text();
-                            previewContent.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
-                        } catch (err) {
-                            previewContent.innerHTML = 'Error loading text preview.';
-                        }
-                    } else {
-                        previewContent.innerHTML = 'Preview not available for this file type.<br>Double-click to open externally (coming soon).';
-                    }
+                    const text = await res.text();
+                    previewContent.innerHTML = '<pre>' + escapeHtml(text.slice(0, 50000)) + '</pre>';
+                } catch (e) {
+                    previewContent.innerHTML = 'Error loading text preview.';
                 }
+            } else {
+                previewContent.innerHTML = 'Preview not available for this binary file.<br><br>Double-click to open in VS Code!';
+            }
+        }
 
-                function escapeHtml(unsafe) {
-                    return unsafe
-                        .replace(/&/g, "&amp;")
-                        .replace(/</g, "&lt;")
-                        .replace(/>/g, "&gt;")
-                        .replace(/"/g, "&quot;")
-                        .replace(/'/g, "&#039;");
-                }
+        function handleDoubleClick(name, isDir) {
+            const sep = isWindows ? '\\' : '/';
+            const newPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
+            if (isDir) {
+                loadFiles(newPath);
+            } else {
+                openSelectedItemInEditor(newPath);
+            }
+        }
 
-                function handleDoubleClick(name, isDir) {
-                    if (isDir) {
-                        const sep = isWindows ? '\\' : '/';
-                        const newPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
-                        loadFiles(newPath);
-                    } else {
-                        // In the future, this will trigger the read_file API and show a preview modal
-                        alert("File preview coming soon!");
-                    }
-                }
+        function openSelectedItemInEditor(targetPath) {
+            const sep = isWindows ? '\\' : '/';
+            const path = targetPath || (selectedItem ? (currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name) : null);
+            if (path) {
+                fetch('/api/files/openInEditor?path=' + encodeURIComponent(path)).catch(function() {});
+                showToast('Opening ' + (selectedItem ? selectedItem.name : 'file') + ' in VS Code...', '🚀');
+            }
+            closeContextMenu();
+        }
 
-                function goUp() {
-                    const sep = isWindows ? '\\' : '/';
-                    if (!isWindows && currentPath === '/') return; // Already at root
+        // ══════════════════════════════════════════════════════════
+        // 📋 CLIPBOARD & FILE CRUD ACTIONS
+        // ══════════════════════════════════════════════════════════
 
-                    const parts = currentPath.split(sep);
-                    parts.pop();
-                    let newPath = parts.join(sep);
-                    
-                    if (newPath === '') newPath = sep; // Fix for Mac/Linux root
-                    if (isWindows && newPath.endsWith(':')) newPath += '\\';
-                    
-                    loadFiles(newPath);
-                }
+        function copySelectedItem() {
+            if (!selectedItem) return;
+            const sep = isWindows ? '\\' : '/';
+            const fullPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
+            clipboard = { action: 'copy', path: fullPath, name: selectedItem.name };
+            updateSelectionState();
+            renderItems(currentItems);
+            showToast('Copied "' + selectedItem.name + '" to clipboard', '📋');
+            closeContextMenu();
+        }
 
-                function goHome() {
-                    loadFiles('.');
-                }
+        function cutSelectedItem() {
+            if (!selectedItem) return;
+            const sep = isWindows ? '\\' : '/';
+            const fullPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
+            clipboard = { action: 'cut', path: fullPath, name: selectedItem.name };
+            updateSelectionState();
+            renderItems(currentItems);
+            showToast('Cut "' + selectedItem.name + '" (ready to paste)', '✂️');
+            closeContextMenu();
+        }
 
-                function handlePathEnter(e) {
-                    if (e.key === 'Enter') {
-                        loadFiles(e.target.value);
-                    }
-                }
-
-                function formatBytes(bytes) {
-                    if (bytes === 0) return '0 B';
-                    const k = 1024;
-                    const sizes = ['B', 'KB', 'MB', 'GB'];
-                    const i = Math.floor(Math.log(bytes) / Math.log(k));
-                    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-                }
-
-                let systemRoots = [];
-
-                async function fetchRoots() {
-                    try {
-                        const res = await fetch('/api/files/roots');
-                        if (res.ok) {
-                            systemRoots = await res.json();
-                        }
-                    } catch (e) {
-                        console.error('Failed to load roots', e);
-                    }
-                }
-
-                function togglePathDropdown(e) {
-                    if (e) e.stopPropagation();
-                    const dropdown = document.getElementById('path-dropdown');
-                    if (dropdown.style.display === 'none' || !dropdown.style.display) {
-                        openPathDropdown();
-                    } else {
-                        closePathDropdown();
-                    }
-                }
-
-                function openPathDropdown() {
-                    const dropdown = document.getElementById('path-dropdown');
-                    renderPathDropdown();
-                    dropdown.style.display = 'flex';
-                }
-
-                function closePathDropdown() {
-                    const dropdown = document.getElementById('path-dropdown');
-                    dropdown.style.display = 'none';
-                }
-
-                function renderPathDropdown() {
-                    const dropdown = document.getElementById('path-dropdown');
-                    let html = '';
-
-                    // 1. Drives & System Locations
-                    if (systemRoots && systemRoots.length > 0) {
-                        html += '<div class="dropdown-section-title">Drives & System Roots</div>';
-                        for (const root of systemRoots) {
-                            const icon = root.type === 'Drive' ? '💻' : root.type === 'Home' ? '🏠' : root.type === 'Desktop' ? '🖥️' : '📁';
-                            html += `
-                                <div class="dropdown-item" onclick="selectDropdownPath('${escapePath(root.path)}')">
-                                    <i>${icon}</i>
-                                    <span>${escapeHtml(root.name)}</span>
-                                    <span class="item-sub">${escapeHtml(root.path)}</span>
-                                </div>
-                            `;
-                        }
-                    }
-
-                    // 2. Folder Hierarchy / Breadcrumb trail
-                    const sep = isWindows ? '\\' : '/';
-                    if (currentPath && currentPath !== '.') {
-                        const parts = currentPath.split(sep).filter(p => p !== '');
-                        if (parts.length > 0) {
-                            html += '<div class="dropdown-divider"></div>';
-                            html += '<div class="dropdown-section-title">Folder Hierarchy</div>';
-                            
-                            // Root level
-                            const rootPath = isWindows ? (currentPath.slice(0, 3)) : '/';
-                            html += `
-                                <div class="dropdown-item" onclick="selectDropdownPath('${escapePath(rootPath)}')">
-                                    <i>📁</i>
-                                    <span>${isWindows ? rootPath : '/ (Root)'}</span>
-                                    <span class="item-sub">${escapeHtml(rootPath)}</span>
-                                </div>
-                            `;
-
-                            let accum = isWindows ? rootPath : '';
-                            for (let i = 0; i < parts.length; i++) {
-                                if (isWindows && i === 0 && parts[0].endsWith(':')) continue;
-                                accum = isWindows ? (accum.endsWith('\\') ? accum + parts[i] : accum + '\\' + parts[i]) : accum + '/' + parts[i];
-                                const isCurrent = (accum === currentPath);
-                                html += `
-                                    <div class="dropdown-item" style="padding-left: ${(i + 2) * 12}px; ${isCurrent ? 'font-weight: 600; color: #74b9ff;' : ''}" onclick="selectDropdownPath('${escapePath(accum)}')">
-                                        <i>📂</i>
-                                        <span>${escapeHtml(parts[i])}${isCurrent ? ' (Current)' : ''}</span>
-                                        <span class="item-sub">${escapeHtml(accum)}</span>
-                                    </div>
-                                `;
-                            }
-                        }
-                    }
-
-                    // 3. Child Folders in Current Directory
-                    const subdirs = currentItems.filter(i => i.type === 'Directory');
-                    if (subdirs.length > 0) {
-                        html += '<div class="dropdown-divider"></div>';
-                        html += '<div class="dropdown-section-title">Subfolders in Current Directory</div>';
-                        for (const sub of subdirs) {
-                            const subPath = currentPath.endsWith(sep) ? currentPath + sub.name : currentPath + sep + sub.name;
-                            html += `
-                                <div class="dropdown-item" onclick="selectDropdownPath('${escapePath(subPath)}')">
-                                    <i>📁</i>
-                                    <span>${escapeHtml(sub.name)}</span>
-                                </div>
-                            `;
-                        }
-                    }
-
-                    dropdown.innerHTML = html;
-                }
-
-                function escapePath(path) {
-                    return path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                }
-
-                function selectDropdownPath(targetPath) {
-                    closePathDropdown();
-                    loadFiles(targetPath);
-                }
-
-                // Close dropdown when clicking outside
-                document.addEventListener('click', function(e) {
-                    const container = document.querySelector('.path-bar-container');
-                    if (container && !container.contains(e.target)) {
-                        closePathDropdown();
-                    }
+        async function pasteClipboardItem() {
+            if (!clipboard) return;
+            try {
+                const endpoint = clipboard.action === 'copy' ? '/api/files/copy' : '/api/files/move';
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: clipboard.path, destinationDir: currentPath })
                 });
 
-                // Escape key closes dropdown
-                document.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape') {
-                        closePathDropdown();
+                if (res.ok) {
+                    showToast('Pasted "' + clipboard.name + '" successfully', '📥');
+                    if (clipboard.action === 'cut') {
+                        clipboard = null;
                     }
-                });
+                    loadFiles(currentPath);
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Failed to paste item', '❌');
+                }
+            } catch (e) {
+                showToast('Paste operation failed', '❌');
+            }
+            closeContextMenu();
+        }
 
-                // Initial load
-                fetchRoots();
-                loadFiles('.');
-            </script>
-        </body>
-        </html>
-        """;
+        // ══════════════════════════════════════════════════════════
+        // 🗂️ MODAL DIALOGS (New Folder, New File, Rename, Delete)
+        // ══════════════════════════════════════════════════════════
+
+        function openModal(title, bodyHtml, actionsHtml) {
+            document.getElementById('modal-title').innerHTML = title;
+            document.getElementById('modal-body').innerHTML = bodyHtml;
+            document.getElementById('modal-actions').innerHTML = actionsHtml;
+            document.getElementById('modal-overlay').style.display = 'flex';
+            const input = document.querySelector('.modal-input');
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').style.display = 'none';
+        }
+
+        function handleModalOverlayClick(e) {
+            if (e.target.id === 'modal-overlay') closeModal();
+        }
+
+        function showNewFolderModal() {
+            closeContextMenu();
+            openModal(
+                '📁 Create New Folder',
+                '<input type="text" id="modal-folder-name" class="modal-input" placeholder="Folder Name..." value="New Folder" onkeydown="if(event.key===\'Enter\')confirmNewFolder()" />',
+                '<button class="modal-btn" onclick="closeModal()">Cancel</button><button class="modal-btn primary" onclick="confirmNewFolder()">Create</button>'
+            );
+        }
+
+        async function confirmNewFolder() {
+            const input = document.getElementById('modal-folder-name');
+            const name = input ? input.value.trim() : '';
+            if (!name) return;
+            try {
+                const res = await fetch('/api/files/newFolder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ currentPath: currentPath, folderName: name })
+                });
+                if (res.ok) {
+                    closeModal();
+                    showToast('Folder "' + name + '" created', '📁');
+                    loadFiles(currentPath);
+                } else {
+                    showToast('Failed to create folder', '❌');
+                }
+            } catch (e) {
+                showToast('Error creating folder', '❌');
+            }
+        }
+
+        function showNewFileModal() {
+            closeContextMenu();
+            openModal(
+                '📄 Create New File',
+                '<input type="text" id="modal-file-name" class="modal-input" placeholder="File Name (e.g. notes.txt)..." value="untitled.txt" onkeydown="if(event.key===\'Enter\')confirmNewFile()" />',
+                '<button class="modal-btn" onclick="closeModal()">Cancel</button><button class="modal-btn primary" onclick="confirmNewFile()">Create</button>'
+            );
+        }
+
+        async function confirmNewFile() {
+            const input = document.getElementById('modal-file-name');
+            const name = input ? input.value.trim() : '';
+            if (!name) return;
+            try {
+                const res = await fetch('/api/files/newFile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ currentPath: currentPath, fileName: name })
+                });
+                if (res.ok) {
+                    closeModal();
+                    showToast('File "' + name + '" created', '📄');
+                    loadFiles(currentPath);
+                } else {
+                    showToast('Failed to create file', '❌');
+                }
+            } catch (e) {
+                showToast('Error creating file', '❌');
+            }
+        }
+
+        function renameSelectedItem() {
+            if (!selectedItem) return;
+            closeContextMenu();
+            const currentName = selectedItem.name;
+            openModal(
+                '✏️ Rename "' + escapeHtml(currentName) + '"',
+                '<input type="text" id="modal-rename-input" class="modal-input" value="' + escapeHtml(currentName) + '" onkeydown="if(event.key===\'Enter\')confirmRename()" />',
+                '<button class="modal-btn" onclick="closeModal()">Cancel</button><button class="modal-btn primary" onclick="confirmRename()">Rename</button>'
+            );
+        }
+
+        async function confirmRename() {
+            if (!selectedItem) return;
+            const input = document.getElementById('modal-rename-input');
+            const newName = input ? input.value.trim() : '';
+            if (!newName || newName === selectedItem.name) {
+                closeModal();
+                return;
+            }
+            const sep = isWindows ? '\\' : '/';
+            const oldPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
+            try {
+                const res = await fetch('/api/files/rename', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ oldPath: oldPath, newName: newName })
+                });
+                if (res.ok) {
+                    closeModal();
+                    showToast('Renamed to "' + newName + '"', '✏️');
+                    loadFiles(currentPath);
+                } else {
+                    showToast('Failed to rename item', '❌');
+                }
+            } catch (e) {
+                showToast('Error renaming item', '❌');
+            }
+        }
+
+        function deleteSelectedItem() {
+            if (!selectedItem) return;
+            closeContextMenu();
+            const name = selectedItem.name;
+            const isDir = selectedItem.type === 'Directory';
+            openModal(
+                '🗑️ Delete ' + (isDir ? 'Folder' : 'File') + '?',
+                '<p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">Are you sure you want to permanently delete <strong>' + escapeHtml(name) + '</strong>' + (isDir ? ' and all its contents' : '') + '?</p>',
+                '<button class="modal-btn" onclick="closeModal()">Cancel</button><button class="modal-btn danger" onclick="confirmDelete()">Delete</button>'
+            );
+        }
+
+        async function confirmDelete() {
+            if (!selectedItem) return;
+            const sep = isWindows ? '\\' : '/';
+            const targetPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
+            try {
+                const res = await fetch('/api/files/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetPath: targetPath })
+                });
+                if (res.ok) {
+                    closeModal();
+                    showToast('Deleted "' + selectedItem.name + '"', '🗑️');
+                    loadFiles(currentPath);
+                } else {
+                    showToast('Failed to delete item', '❌');
+                }
+            } catch (e) {
+                showToast('Error deleting item', '❌');
+            }
+        }
+
+        async function showPropertiesModal() {
+            if (!selectedItem) return;
+            closeContextMenu();
+            const sep = isWindows ? '\\' : '/';
+            const targetPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
+            
+            try {
+                const res = await fetch('/api/files/details?path=' + encodeURIComponent(targetPath));
+                if (res.ok) {
+                    const details = await res.json();
+                    openModal(
+                        'ℹ️ Properties: ' + escapeHtml(details.name),
+                        '<div style="font-size: 12px; display: flex; flex-direction: column; gap: 8px; color: var(--text-muted);">' +
+                        '<div><strong>Name:</strong> ' + escapeHtml(details.name) + '</div>' +
+                        '<div><strong>Type:</strong> ' + (details.isDirectory ? 'Folder' : 'File') + '</div>' +
+                        '<div><strong>Location:</strong> <span style="word-break: break-all;">' + escapeHtml(details.path) + '</span></div>' +
+                        (!details.isDirectory ? '<div><strong>Size:</strong> ' + formatBytes(details.size) + '</div>' : '') +
+                        '<div><strong>Modified:</strong> ' + new Date(details.modified).toLocaleString() + '</div>' +
+                        '</div>',
+                        '<button class="modal-btn primary" onclick="closeModal()">Close</button>'
+                    );
+                }
+            } catch (e) {
+                showToast('Could not fetch file properties', '⚠️');
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 🖱️ CONTEXT MENUS (Right Click)
+        // ══════════════════════════════════════════════════════════
+
+        function handleItemContextMenu(e, name, isDir) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectedItem = currentItems.find(function(i) { return i.name === name; }) || { name: name, type: isDir ? 'Directory' : 'File' };
+            renderItems(currentItems);
+
+            document.getElementById('ctx-open').style.display = isDir ? 'none' : 'flex';
+            document.getElementById('ctx-div-1').style.display = isDir ? 'none' : 'block';
+            document.getElementById('ctx-rename').style.display = 'flex';
+            document.getElementById('ctx-copy').style.display = 'flex';
+            document.getElementById('ctx-cut').style.display = 'flex';
+            document.getElementById('ctx-delete').style.display = 'flex';
+            document.getElementById('ctx-div-2').style.display = 'block';
+            document.getElementById('ctx-properties').style.display = 'flex';
+            document.getElementById('ctx-div-3').style.display = 'block';
+            document.getElementById('ctx-paste').style.display = clipboard ? 'flex' : 'none';
+
+            showContextMenuAt(e.clientX, e.clientY);
+        }
+
+        function handleBackgroundContextMenu(e) {
+            e.preventDefault();
+            selectedItem = null;
+            renderItems(currentItems);
+
+            document.getElementById('ctx-open').style.display = 'none';
+            document.getElementById('ctx-div-1').style.display = 'none';
+            document.getElementById('ctx-rename').style.display = 'none';
+            document.getElementById('ctx-copy').style.display = 'none';
+            document.getElementById('ctx-cut').style.display = 'none';
+            document.getElementById('ctx-delete').style.display = 'none';
+            document.getElementById('ctx-div-2').style.display = 'none';
+            document.getElementById('ctx-properties').style.display = 'none';
+            document.getElementById('ctx-div-3').style.display = 'none';
+
+            document.getElementById('ctx-paste').style.display = clipboard ? 'flex' : 'none';
+
+            showContextMenuAt(e.clientX, e.clientY);
+        }
+
+        function showContextMenuAt(x, y) {
+            const menu = document.getElementById('context-menu');
+            menu.style.display = 'flex';
+            
+            const menuWidth = 190;
+            const menuHeight = 240;
+            const posX = (x + menuWidth > window.innerWidth) ? window.innerWidth - menuWidth - 10 : x;
+            const posY = (y + menuHeight > window.innerHeight) ? window.innerHeight - menuHeight - 10 : y;
+
+            menu.style.left = posX + 'px';
+            menu.style.top = posY + 'px';
+        }
+
+        function closeContextMenu() {
+            document.getElementById('context-menu').style.display = 'none';
+        }
+
+        document.addEventListener('click', closeContextMenu);
+
+        // ══════════════════════════════════════════════════════════
+        // ⌨️ KEYBOARD SHORTCUTS
+        // ══════════════════════════════════════════════════════════
+
+        document.addEventListener('keydown', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                if (e.key === 'Escape') closeModal();
+                return;
+            }
+
+            if (e.key === 'Escape') {
+                closeContextMenu();
+                closeModal();
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedItem) deleteSelectedItem();
+            } else if (e.key === 'F2') {
+                if (selectedItem) renameSelectedItem();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+                if (selectedItem) copySelectedItem();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+                if (selectedItem) cutSelectedItem();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+                if (clipboard) pasteClipboardItem();
+            }
+        });
+
+        // ══════════════════════════════════════════════════════════
+        // 🧭 PATH & NAVIGATION
+        // ══════════════════════════════════════════════════════════
+
+        function goUp() {
+            const sep = isWindows ? '\\' : '/';
+            if (!isWindows && currentPath === '/') return;
+
+            const parts = currentPath.split(sep);
+            parts.pop();
+            let newPath = parts.join(sep);
+            
+            if (newPath === '') newPath = sep;
+            if (isWindows && newPath.endsWith(':')) newPath += '\\';
+            
+            loadFiles(newPath);
+        }
+
+        function goHome() {
+            loadFiles('.');
+        }
+
+        function handlePathEnter(e) {
+            if (e.key === 'Enter') {
+                loadFiles(e.target.value);
+            }
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function escapePath(path) {
+            if (!path) return '';
+            return path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        let systemRoots = [];
+
+        async function fetchRoots() {
+            try {
+                const res = await fetch('/api/files/roots');
+                if (res.ok) {
+                    systemRoots = await res.json();
+                }
+            } catch (e) {
+                console.error('Failed to load roots', e);
+            }
+        }
+
+        function togglePathDropdown(e) {
+            if (e) e.stopPropagation();
+            const dropdown = document.getElementById('path-dropdown');
+            if (dropdown.style.display === 'none' || !dropdown.style.display) {
+                renderPathDropdown();
+                dropdown.style.display = 'flex';
+            } else {
+                dropdown.style.display = 'none';
+            }
+        }
+
+        function closePathDropdown() {
+            document.getElementById('path-dropdown').style.display = 'none';
+        }
+
+        function renderPathDropdown() {
+            const dropdown = document.getElementById('path-dropdown');
+            let html = '';
+
+            if (systemRoots && systemRoots.length > 0) {
+                html += '<div class="dropdown-section-title">Drives & System Roots</div>';
+                for (let i = 0; i < systemRoots.length; i++) {
+                    const root = systemRoots[i];
+                    const icon = root.type === 'Drive' ? '💻' : root.type === 'Home' ? '🏠' : root.type === 'Desktop' ? '🖥️' : '📁';
+                    html += '<div class="dropdown-item" onclick="selectDropdownPath(\'' + escapePath(root.path) + '\')">' +
+                            '<i>' + icon + '</i>' +
+                            '<span>' + escapeHtml(root.name) + '</span>' +
+                            '<span class="item-sub">' + escapeHtml(root.path) + '</span>' +
+                            '</div>';
+                }
+            }
+
+            const sep = isWindows ? '\\' : '/';
+            if (currentPath && currentPath !== '.') {
+                const parts = currentPath.split(sep).filter(function(p) { return p !== ''; });
+                if (parts.length > 0) {
+                    html += '<div class="dropdown-divider"></div>';
+                    html += '<div class="dropdown-section-title">Folder Hierarchy</div>';
+                    
+                    const rootPath = isWindows ? (currentPath.slice(0, 3)) : '/';
+                    html += '<div class="dropdown-item" onclick="selectDropdownPath(\'' + escapePath(rootPath) + '\')">' +
+                            '<i>📁</i>' +
+                            '<span>' + (isWindows ? rootPath : '/ (Root)') + '</span>' +
+                            '<span class="item-sub">' + escapeHtml(rootPath) + '</span>' +
+                            '</div>';
+
+                    let accum = isWindows ? rootPath : '';
+                    for (let i = 0; i < parts.length; i++) {
+                        if (isWindows && i === 0 && parts[0].endsWith(':')) continue;
+                        accum = isWindows ? (accum.endsWith('\\') ? accum + parts[i] : accum + '\\' + parts[i]) : accum + '/' + parts[i];
+                        const isCurrent = (accum === currentPath);
+                        html += '<div class="dropdown-item" style="padding-left: ' + ((i + 2) * 12) + 'px; ' + (isCurrent ? 'font-weight: 600; color: #74b9ff;' : '') + '" onclick="selectDropdownPath(\'' + escapePath(accum) + '\')">' +
+                                '<i>📂</i>' +
+                                '<span>' + escapeHtml(parts[i]) + (isCurrent ? ' (Current)' : '') + '</span>' +
+                                '<span class="item-sub">' + escapeHtml(accum) + '</span>' +
+                                '</div>';
+                    }
+                }
+            }
+
+            dropdown.innerHTML = html;
+        }
+
+        function selectDropdownPath(targetPath) {
+            closePathDropdown();
+            loadFiles(targetPath);
+        }
+
+        document.addEventListener('click', function(e) {
+            const container = document.querySelector('.path-bar-container');
+            if (container && !container.contains(e.target)) {
+                closePathDropdown();
+            }
+        });
+
+        // Initialize
+        fetchRoots();
+        loadFiles('.');
+    </script>
+</body>
+</html>
+
+"""""";
     }
 }
