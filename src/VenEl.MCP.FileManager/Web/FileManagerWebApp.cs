@@ -243,9 +243,36 @@ public static class FileManagerWebApp
             if (Directory.Exists(path))
             {
                 var di = new DirectoryInfo(path);
-                return Results.Ok(new { name = di.Name, path = di.FullName, isDirectory = true, size = 0L, modified = di.LastWriteTimeUtc });
+                var count = 0;
+                try { count = di.GetFileSystemInfos().Length; } catch {}
+                return Results.Ok(new { name = di.Name, path = di.FullName, isDirectory = true, size = 0L, itemCount = count, modified = di.LastWriteTimeUtc, created = di.CreationTimeUtc });
             }
             return Results.NotFound();
+        });
+
+        // 11b. Open in Terminal
+        _app.MapGet("/api/files/openInTerminal", (string path) =>
+        {
+            try
+            {
+                var dir = Directory.Exists(path) ? path : (File.Exists(path) ? Path.GetDirectoryName(path) : path);
+                if (dir != null && Directory.Exists(dir))
+                {
+                    if (OperatingSystem.IsWindows())
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/K cd /d \"{dir}\"") { UseShellExecute = true });
+                    }
+                    else if (OperatingSystem.IsMacOS())
+                    {
+                        System.Diagnostics.Process.Start("open", $"-a Terminal \"{dir}\"");
+                    }
+                }
+                return Results.Ok(new { ok = true });
+            }
+            catch
+            {
+                return Results.Ok(new { ok = false });
+            }
         });
 
         // 12. UI Dashboard
@@ -279,6 +306,134 @@ public static class FileManagerWebApp
         }
     }
 
+        private static async Task<(string engine, List<object> items)> PerformAgentSearchAsync(string query, string scope, string currentPath, int maxResults)
+    {
+        var isMac = OperatingSystem.IsMacOS();
+        var isWindows = OperatingSystem.IsWindows();
+        var items = new List<object>();
+        var cleanQuery = query.Replace("\"", "").Replace("'", "").Replace(";", "").Trim();
+
+        if (isMac)
+        {
+            var scopeArg = "";
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (scope == "home") scopeArg = $"-onlyin \"{home}\"";
+            else if (scope == "current" && !string.IsNullOrWhiteSpace(currentPath) && Directory.Exists(currentPath))
+                scopeArg = $"-onlyin \"{currentPath}\"";
+
+            string mdfindExpr;
+            if (cleanQuery.StartsWith("*."))
+                mdfindExpr = $"\"kMDItemFSName == '*.{cleanQuery.Substring(2)}'c\"";
+            else if (cleanQuery.StartsWith("."))
+                mdfindExpr = $"\"kMDItemFSName == '*.{cleanQuery.Substring(1)}'c\"";
+            else
+                mdfindExpr = $"\"kMDItemFSName == '*{cleanQuery}*'c\"";
+
+            var cmd = $"mdfind {scopeArg} {mdfindExpr} | head -n {maxResults}";
+            var output = await RunBashCommandAsync(cmd);
+            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var line in lines)
+            {
+                var filePath = line.Trim();
+                try
+                {
+                    if (File.Exists(filePath))
+                    {
+                        var fi = new FileInfo(filePath);
+                        items.Add(new
+                        {
+                            name = fi.Name,
+                            path = fi.FullName,
+                            directory = fi.DirectoryName,
+                            isDirectory = false,
+                            type = "File",
+                            size = fi.Length,
+                            modified = fi.LastWriteTimeUtc.ToString("o")
+                        });
+                    }
+                    else if (Directory.Exists(filePath))
+                    {
+                        var di = new DirectoryInfo(filePath);
+                        items.Add(new
+                        {
+                            name = di.Name,
+                            path = di.FullName,
+                            directory = di.Parent?.FullName ?? di.FullName,
+                            isDirectory = true,
+                            type = "Directory",
+                            size = 0L,
+                            modified = di.LastWriteTimeUtc.ToString("o")
+                        });
+                    }
+                }
+                catch { }
+            }
+            return ("Apple Spotlight Index (mdfind)", items);
+        }
+        else if (isWindows)
+        {
+            var rootPath = scope == "home" ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : "C:\\Users";
+            if (scope == "current" && !string.IsNullOrWhiteSpace(currentPath) && Directory.Exists(currentPath)) rootPath = currentPath;
+
+            try
+            {
+                var dir = new DirectoryInfo(rootPath);
+                var files = dir.EnumerateFileSystemInfos($"*{cleanQuery}*", new EnumerationOptions
+                {
+                    RecurseSubdirectories = true,
+                    IgnoreInaccessible = true,
+                    MaxRecursionDepth = 5
+                }).Take(maxResults);
+
+                foreach (var info in files)
+                {
+                    bool isDir = (info.Attributes & FileAttributes.Directory) == FileAttributes.Directory;
+                    items.Add(new
+                    {
+                        name = info.Name,
+                        path = info.FullName,
+                        directory = Path.GetDirectoryName(info.FullName),
+                        isDirectory = isDir,
+                        type = isDir ? "Directory" : "File",
+                        size = isDir ? 0L : ((FileInfo)info).Length,
+                        modified = info.LastWriteTimeUtc.ToString("o")
+                    });
+                }
+            }
+            catch { }
+            return ("Windows Search Index", items);
+        }
+        else
+        {
+            return ("Generic", items);
+        }
+    }
+
+    private static Task<string> RunBashCommandAsync(string command)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = $"-c \"{command.Replace("\"", "\\\"")}\"",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var p = System.Diagnostics.Process.Start(psi);
+                if (p == null) return string.Empty;
+                var outStr = p.StandardOutput.ReadToEnd();
+                p.WaitForExit(3000);
+                return outStr;
+            }
+            catch { return string.Empty; }
+        });
+    }
+
     private static string GetIndexHtml()
     {
         return """"""
@@ -292,10 +447,11 @@ public static class FileManagerWebApp
     <style>
         :root {
             --bg-color: #121214;
+            --sidebar-bg: #15151a;
             --panel-bg: rgba(255, 255, 255, 0.03);
             --border-color: rgba(255, 255, 255, 0.1);
             --text-main: #e0e0e0;
-            --text-muted: #888;
+            --text-muted: #888899;
             --accent: #6c5ce7;
             --accent-hover: #8172fa;
             --accent-gradient: linear-gradient(135deg, #6c5ce7 0%, #00cec9 100%);
@@ -308,7 +464,7 @@ public static class FileManagerWebApp
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-main);
             height: 100vh;
@@ -322,12 +478,12 @@ public static class FileManagerWebApp
         header {
             position: relative;
             z-index: 6000;
-            padding: 10px 18px;
+            padding: 8px 16px;
             background: #141418;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
         .dropdown-backdrop {
             position: fixed;
@@ -342,13 +498,13 @@ public static class FileManagerWebApp
         }
         .nav-buttons {
             display: flex;
-            gap: 6px;
+            gap: 4px;
         }
         .nav-buttons button, .tool-btn {
             background: transparent;
             border: 1px solid var(--border-color);
             color: var(--text-main);
-            padding: 6px 10px;
+            padding: 5px 9px;
             border-radius: 6px;
             cursor: pointer;
             transition: all 0.15s ease;
@@ -362,9 +518,10 @@ public static class FileManagerWebApp
             background: var(--hover-bg);
             border-color: rgba(255, 255, 255, 0.2);
         }
-        .tool-btn:disabled {
-            opacity: 0.4;
+        .nav-buttons button:disabled, .tool-btn:disabled {
+            opacity: 0.35;
             cursor: not-allowed;
+            border-color: transparent;
         }
         .tool-btn.primary {
             background: var(--accent);
@@ -378,8 +535,10 @@ public static class FileManagerWebApp
         .nav-buttons button.active {
             background: var(--accent);
             border-color: var(--accent);
+            color: #fff;
         }
 
+        /* Path Bar with Interactive Breadcrumb Pills */
         .path-bar-container {
             flex-grow: 1;
             position: relative;
@@ -391,18 +550,58 @@ public static class FileManagerWebApp
             background: var(--bg-color);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            padding: 0 4px 0 10px;
-            transition: border-color 0.2s;
+            padding: 2px 4px 2px 8px;
+            transition: border-color 0.2s, background 0.2s;
+            min-height: 32px;
+            cursor: text;
         }
         .path-bar:focus-within {
             border-color: var(--accent);
+            background: #18181e;
+        }
+        .path-breadcrumbs {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex-grow: 1;
+            overflow-x: auto;
+            scrollbar-width: none;
+            padding: 2px 0;
+        }
+        .path-breadcrumbs::-webkit-scrollbar { display: none; }
+        .crumb {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            white-space: nowrap;
+        }
+        .crumb:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+        }
+        .crumb.current {
+            font-weight: 600;
+            color: #74b9ff;
+        }
+        .crumb-sep {
+            color: var(--text-muted);
+            font-size: 11px;
+            opacity: 0.5;
+            padding: 0 1px;
+            user-select: none;
         }
         #path {
-            width: 100%;
+            flex-grow: 1;
             background: transparent;
             border: none;
             color: var(--text-main);
-            padding: 7px 0;
+            padding: 5px 0;
             font-size: 13px;
             outline: none;
             font-family: inherit;
@@ -411,10 +610,11 @@ public static class FileManagerWebApp
             background: transparent;
             border: none;
             color: var(--text-muted);
-            padding: 6px 8px;
+            padding: 4px 6px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 11px;
+            transition: all 0.15s;
         }
         #btn-path-dropdown:hover {
             background: var(--hover-bg);
@@ -425,30 +625,31 @@ public static class FileManagerWebApp
         .toolbar {
             position: relative;
             z-index: 100;
-            padding: 6px 18px;
-            background: rgba(0, 0, 0, 0.2);
+            padding: 5px 16px;
+            background: rgba(0, 0, 0, 0.22);
             border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 8px;
+            overflow-x: auto;
         }
         .toolbar-group {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
         }
         .toolbar-divider {
             width: 1px;
             height: 18px;
             background: var(--border-color);
-            margin: 0 4px;
+            margin: 0 3px;
         }
 
         /* Search bar */
         .search-input {
-            width: 220px;
-            padding: 6px 10px;
+            width: 200px;
+            padding: 5px 10px;
             border-radius: 6px;
             border: 1px solid var(--border-color);
             background: var(--panel-bg);
@@ -459,7 +660,7 @@ public static class FileManagerWebApp
         }
         .search-input:focus {
             border-color: var(--accent);
-            width: 280px;
+            width: 240px;
         }
 
         /* Dropdown - Solid, Opaque & High Contrast */
@@ -528,7 +729,7 @@ public static class FileManagerWebApp
             margin: 4px 0;
         }
 
-        /* Main Content Layout */
+        /* Main Content Layout with Collapsible Quick Access Rail */
         .main-content {
             position: relative;
             z-index: 10;
@@ -536,56 +737,116 @@ public static class FileManagerWebApp
             flex-grow: 1;
             overflow: hidden;
         }
+
+        /* Quick Access / Favorites Sidebar Rail */
+        .quick-access-sidebar {
+            width: 195px;
+            min-width: 195px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 10px 8px;
+            transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.2s, padding 0.2s, opacity 0.2s;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .quick-access-sidebar.collapsed {
+            width: 0;
+            min-width: 0;
+            padding: 0;
+            border-right: none;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .sidebar-group-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            padding: 8px 10px 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .quick-item {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #dfe6e9;
+            transition: background 0.15s, color 0.15s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .quick-item:hover {
+            background: var(--hover-bg);
+            color: #ffffff;
+        }
+        .quick-item.active {
+            background: var(--active-bg);
+            color: #a29bfe;
+            font-weight: 600;
+        }
+        .quick-item i {
+            font-style: normal;
+            font-size: 14px;
+            width: 18px;
+            text-align: center;
+        }
+
+        /* File List Container */
         .file-list-container {
             flex-grow: 1;
             overflow-y: auto;
-            padding: 14px 18px;
-            position: relative;
-        }
-        .preview-pane {
-            width: 340px;
-            background: var(--panel-bg);
-            border-left: 1px solid var(--border-color);
-            padding: 18px;
+            padding: 14px;
+            background: var(--bg-color);
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
         }
-        .preview-pane h2 {
-            font-size: 15px;
+
+        /* Column Sorting Header (List View) */
+        .list-header {
+            display: grid;
+            grid-template-columns: 28px 1fr 140px 100px 90px;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 10px;
+            font-size: 11px;
             font-weight: 600;
-            margin-bottom: 12px;
-            color: var(--accent);
-            word-break: break-all;
-        }
-        .preview-content {
-            flex-grow: 1;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             color: var(--text-muted);
-            font-size: 13px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 6px;
+            user-select: none;
         }
-        .preview-content pre {
-            background: rgba(0,0,0,0.35);
-            padding: 10px;
-            border-radius: 6px;
-            overflow-x: auto;
-            color: #a8b2d1;
-            white-space: pre-wrap;
-            font-family: monospace;
-            font-size: 12px;
-            max-height: 400px;
+        .col-sortable {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: color 0.15s;
         }
-        .preview-content img {
-            max-width: 100%;
-            border-radius: 6px;
-            margin-top: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        .col-sortable:hover {
+            color: var(--text-main);
+        }
+        .sort-icon {
+            font-size: 10px;
+            color: var(--accent);
         }
 
         /* Items in Grid View */
         #files.grid-view {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
             gap: 12px;
+            padding: 4px;
         }
         #files.grid-view .item {
             display: flex;
@@ -593,57 +854,93 @@ public static class FileManagerWebApp
             align-items: center;
             justify-content: center;
             text-align: center;
-            gap: 8px;
-            padding: 14px 8px;
+            padding: 12px 8px;
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.15s ease;
+            position: relative;
             background: var(--panel-bg);
             border: 1px solid transparent;
-            position: relative;
+            min-height: 105px;
         }
         #files.grid-view .item:hover {
-            border-color: var(--border-color);
             background: var(--hover-bg);
+            border-color: rgba(255, 255, 255, 0.15);
             transform: translateY(-2px);
         }
         #files.grid-view .item.selected {
             background: var(--active-bg);
             border-color: var(--active-border);
-            box-shadow: 0 0 10px rgba(108, 92, 231, 0.3);
+            box-shadow: 0 0 10px rgba(108, 92, 231, 0.25);
         }
         #files.grid-view .item.cut-item {
             opacity: 0.5;
             filter: grayscale(0.5);
         }
-        #files.grid-view .item i { font-style: normal; font-size: 38px; }
+        #files.grid-view .item-icon-wrapper {
+            position: relative;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 48px;
+            width: 48px;
+        }
+        #files.grid-view .item i {
+            font-style: normal;
+            font-size: 38px;
+        }
+        #files.grid-view .item-thumb {
+            width: 44px;
+            height: 44px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        #files.grid-view .item-badge {
+            position: absolute;
+            bottom: -2px;
+            right: -4px;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 3px;
+            background: #2d3436;
+            color: #dfe6e9;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            text-transform: uppercase;
+        }
         #files.grid-view .item-size { display: none; }
+        #files.grid-view .item-modified { display: none; }
+        #files.grid-view .item-type { display: none; }
         #files.grid-view .item-name { 
             word-break: break-all;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 500;
+            line-height: 1.3;
         }
 
         /* Items in List View */
         #files.list-view {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 2px;
         }
         #files.list-view .item {
             display: grid;
-            grid-template-columns: auto 1fr auto auto;
+            grid-template-columns: 28px 1fr 140px 100px 90px;
             align-items: center;
-            gap: 12px;
-            padding: 8px 12px;
+            gap: 10px;
+            padding: 6px 10px;
             border-radius: 6px;
             cursor: pointer;
             transition: background 0.15s ease;
             border: 1px solid transparent;
+            font-size: 12px;
         }
         #files.list-view .item:hover { background: var(--hover-bg); }
         #files.list-view .item.selected {
@@ -651,23 +948,94 @@ public static class FileManagerWebApp
             border-color: var(--active-border);
         }
         #files.list-view .item.cut-item { opacity: 0.5; }
-        #files.list-view .item i { font-style: normal; font-size: 18px; }
-        #files.list-view .item-size { color: var(--text-muted); font-size: 11px; }
-        #files.list-view .item-name { font-size: 13px; font-weight: 500; }
+        #files.list-view .item-icon-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #files.list-view .item i { font-style: normal; font-size: 16px; }
+        #files.list-view .item-thumb {
+            width: 18px;
+            height: 18px;
+            object-fit: cover;
+            border-radius: 2px;
+        }
+        #files.list-view .item-badge { display: none; }
+        #files.list-view .item-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #files.list-view .item-modified { color: var(--text-muted); font-size: 11px; }
+        #files.list-view .item-type { color: var(--text-muted); font-size: 11px; }
+        #files.list-view .item-size { color: var(--text-muted); font-size: 11px; text-align: right; }
         
-        .folder .item-name { color: #74b9ff; }
+        .folder .item-name { color: #74b9ff; font-weight: 600; }
         .file .item-name { color: #dfe6e9; }
+
+        /* Preview Pane */
+        .preview-pane {
+            width: 320px;
+            min-width: 320px;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            overflow-y: auto;
+            transition: width 0.2s, min-width 0.2s, padding 0.2s;
+        }
+        .preview-pane.collapsed {
+            width: 0;
+            min-width: 0;
+            padding: 0;
+            border-left: none;
+            overflow: hidden;
+        }
+        .preview-pane h2 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+            word-break: break-all;
+        }
+        .preview-content {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            word-break: break-all;
+        }
+        .preview-content pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            color: #a29bfe;
+            white-space: pre-wrap;
+            max-height: 380px;
+        }
+        .preview-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            margin-top: 8px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        }
 
         /* Context Menu */
         .context-menu {
             position: fixed;
-            background: rgba(24, 24, 28, 0.95);
-            backdrop-filter: blur(14px);
-            border: 1px solid var(--border-color);
+            background: #1c1c24;
+            border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: 8px;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
-            min-width: 180px;
-            z-index: 2000;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
+            min-width: 190px;
+            z-index: 7000;
             display: none;
             flex-direction: column;
             padding: 5px 0;
@@ -683,11 +1051,11 @@ public static class FileManagerWebApp
             transition: background 0.12s;
         }
         .context-item:hover {
-            background: var(--hover-bg);
+            background: #2d2654;
             color: #fff;
         }
         .context-item.danger:hover {
-            background: rgba(235, 77, 75, 0.2);
+            background: rgba(235, 77, 75, 0.25);
             color: #ff7675;
         }
         .context-item i { font-style: normal; width: 16px; text-align: center; }
@@ -698,7 +1066,7 @@ public static class FileManagerWebApp
         }
         .context-divider {
             height: 1px;
-            background: var(--border-color);
+            background: rgba(255, 255, 255, 0.1);
             margin: 4px 0;
         }
 
@@ -706,46 +1074,46 @@ public static class FileManagerWebApp
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.65);
             backdrop-filter: blur(4px);
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 3000;
+            z-index: 8000;
         }
         .modal-box {
             background: var(--modal-bg);
-            border: 1px solid var(--border-color);
+            border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 12px;
-            padding: 24px;
-            width: 380px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+            padding: 22px;
+            width: 400px;
+            max-width: 90vw;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9);
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 14px;
             animation: modalFade 0.15s ease-out;
         }
         @keyframes modalFade {
-            from { opacity: 0; transform: scale(0.95); }
+            from { opacity: 0; transform: scale(0.96); }
             to { opacity: 1; transform: scale(1); }
         }
         .modal-title {
             font-size: 15px;
             font-weight: 600;
-            color: var(--text-main);
             display: flex;
             align-items: center;
             gap: 8px;
         }
         .modal-input {
             width: 100%;
-            padding: 10px 12px;
+            padding: 9px 12px;
             border-radius: 6px;
             border: 1px solid var(--border-color);
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.35);
             color: var(--text-main);
-            font-size: 13px;
             outline: none;
+            font-size: 13px;
         }
         .modal-input:focus {
             border-color: var(--accent);
@@ -753,71 +1121,105 @@ public static class FileManagerWebApp
         .modal-actions {
             display: flex;
             justify-content: flex-end;
-            gap: 10px;
+            gap: 8px;
+            margin-top: 4px;
         }
         .modal-btn {
-            padding: 8px 16px;
+            padding: 7px 14px;
             border-radius: 6px;
-            border: 1px solid var(--border-color);
-            background: transparent;
-            color: var(--text-main);
             font-size: 12px;
             cursor: pointer;
-            transition: 0.15s;
+            border: 1px solid transparent;
+            font-weight: 500;
+            transition: all 0.15s ease;
         }
-        .modal-btn:hover { background: var(--hover-bg); }
-        .modal-btn.primary {
+        .modal-btn.cancel {
+            background: transparent;
+            border-color: var(--border-color);
+            color: var(--text-main);
+        }
+        .modal-btn.cancel:hover { background: var(--hover-bg); }
+        .modal-btn.confirm {
             background: var(--accent);
-            border-color: var(--accent);
             color: #fff;
         }
-        .modal-btn.primary:hover { background: var(--accent-hover); }
+        .modal-btn.confirm:hover { background: var(--accent-hover); }
         .modal-btn.danger {
             background: var(--danger);
-            border-color: var(--danger);
             color: #fff;
         }
         .modal-btn.danger:hover { background: var(--danger-hover); }
 
-        /* Toast notifications */
-        .toast-container {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
+        /* Properties Dialog Style */
+        .prop-grid {
+            display: grid;
+            grid-template-columns: 100px 1fr;
+            gap: 8px 12px;
+            font-size: 12px;
+            padding: 8px 0;
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .prop-label { color: var(--text-muted); font-weight: 500; }
+        .prop-value { color: var(--text-main); word-break: break-all; }
+
+        /* Quick Look Modal (Spacebar) */
+        .quick-look-box {
+            width: 580px;
+            max-width: 90vw;
+            max-height: 80vh;
+        }
+        .quick-look-body {
+            max-height: 60vh;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            z-index: 4000;
+            align-items: center;
+            justify-content: center;
         }
+
+        /* Toast Notifications */
         .toast {
-            background: rgba(28, 28, 33, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color);
-            color: var(--text-main);
-            padding: 10px 16px;
+            position: fixed;
+            bottom: 35px;
+            right: 25px;
+            background: #1c1c24;
+            border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 8px;
-            font-size: 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            padding: 10px 16px;
+            font-size: 13px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
             display: flex;
             align-items: center;
             gap: 10px;
-            animation: toastIn 0.2s ease;
+            z-index: 9000;
+            animation: slideUp 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
         }
-        @keyframes toastIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
 
-        /* Status bar */
+        /* Bottom Status Bar */
         .status-bar {
-            padding: 6px 18px;
-            background: var(--panel-bg);
+            height: 26px;
+            background: #0e0e11;
             border-top: 1px solid var(--border-color);
+            padding: 0 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             font-size: 11px;
             color: var(--text-muted);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.04); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -825,15 +1227,18 @@ public static class FileManagerWebApp
     <!-- Click-Catching Dim Backdrop for Folder Dropdown -->
     <div id="path-dropdown-backdrop" class="dropdown-backdrop" onclick="closePathDropdown(event)" style="display: none;"></div>
 
-    <!-- Top Address & Navigation Bar -->
+    <!-- Top Address & Navigation Bar (Windows / Mac Style) -->
     <header>
         <div class="nav-buttons">
-            <button onclick="goUp()" title="Go Up One Level">⬆ Up</button>
-            <button onclick="goHome()" title="Go to Home Folder">🏠 Home</button>
+            <button id="btn-back" onclick="goBack()" disabled title="Back (Alt+Left)">⬅</button>
+            <button id="btn-forward" onclick="goForward()" disabled title="Forward (Alt+Right)">➡</button>
+            <button id="btn-up" onclick="goUp()" title="Up One Level (Alt+Up)">⬆</button>
+            <button id="btn-home" onclick="goHome()" title="Home Folder">🏠</button>
         </div>
         <div class="path-bar-container">
-            <div class="path-bar">
-                <input type="text" id="path" onkeypress="handlePathEnter(event)" placeholder="Enter path or choose location..." autocomplete="off" />
+            <div class="path-bar" id="path-bar-box" onclick="handlePathBarClick(event)">
+                <div class="path-breadcrumbs" id="path-breadcrumbs"></div>
+                <input type="text" id="path" onkeypress="handlePathEnter(event)" onblur="exitPathEditMode()" style="display: none;" placeholder="Type path and press Enter..." autocomplete="off" />
                 <button id="btn-path-dropdown" onclick="togglePathDropdown(event)" title="Browse drives and folders">▾</button>
             </div>
             <div id="path-dropdown" class="path-dropdown" onclick="event.stopPropagation()" style="display: none;"></div>
@@ -845,9 +1250,13 @@ public static class FileManagerWebApp
         </div>
     </header>
 
-    <!-- CRUD Action Toolbar -->
+    <!-- CRUD & Explorer Action Toolbar -->
     <div class="toolbar">
         <div class="toolbar-group">
+            <button class="tool-btn" id="btn-rail-toggle" onclick="toggleSidebarRail()" title="Toggle Favorites Sidebar (Ctrl+B)">
+                <i>◧</i> Sidebar
+            </button>
+            <div class="toolbar-divider"></div>
             <button class="tool-btn primary" onclick="showNewFolderModal()">
                 <i>📁</i> New Folder
             </button>
@@ -872,8 +1281,14 @@ public static class FileManagerWebApp
                 <i>🗑️</i> Delete
             </button>
             <div class="toolbar-divider"></div>
-            <button class="tool-btn" onclick="refreshCurrentFolder()" title="Refresh">
-                <i>🔄</i> Refresh
+            <button class="tool-btn" id="btn-terminal" onclick="openTerminalAtCurrent()" title="Open in Terminal">
+                <i>💻</i> Terminal
+            </button>
+            <button class="tool-btn" id="btn-properties" onclick="showPropertiesModal()" disabled title="Properties (Alt+Enter)">
+                <i>ℹ️</i> Properties
+            </button>
+            <button class="tool-btn" onclick="refreshCurrentFolder()" title="Refresh (F5)">
+                <i>🔄</i>
             </button>
         </div>
 
@@ -884,7 +1299,43 @@ public static class FileManagerWebApp
 
     <!-- Main Explorer Area -->
     <div class="main-content">
+        <!-- Collapsible Left Favorites & Drives Sidebar (Windows Quick Access / macOS Favorites) -->
+        <aside class="quick-access-sidebar" id="quick-access-sidebar">
+            <div class="sidebar-group-title">
+                <span>Favorites</span>
+            </div>
+            <div id="quick-favorites">
+                <div class="quick-item" onclick="goHome()">
+                    <i>🏠</i> <span>Home</span>
+                </div>
+                <div class="quick-item" id="fav-desktop" onclick="quickNav('Desktop')">
+                    <i>🖥️</i> <span>Desktop</span>
+                </div>
+                <div class="quick-item" id="fav-documents" onclick="quickNav('Documents')">
+                    <i>📁</i> <span>Documents</span>
+                </div>
+                <div class="quick-item" id="fav-downloads" onclick="quickNav('Downloads')">
+                    <i>📥</i> <span>Downloads</span>
+                </div>
+            </div>
+
+            <div class="sidebar-group-title" style="margin-top: 10px;">
+                <span>Drives & Volumes</span>
+            </div>
+            <div id="quick-drives"></div>
+        </aside>
+
+        <!-- Center Explorer Content -->
         <div class="file-list-container" id="file-list-container" onclick="handleContainerClick(event)" oncontextmenu="handleBackgroundContextMenu(event)">
+            <!-- List View Header (Visible only in List Mode) -->
+            <div id="list-header" class="list-header" style="display: none;">
+                <div></div>
+                <div class="col-sortable" onclick="handleSort('name')">Name <span id="sort-name-icon">▲</span></div>
+                <div class="col-sortable" onclick="handleSort('modified')">Date Modified <span id="sort-modified-icon"></span></div>
+                <div class="col-sortable" onclick="handleSort('type')">Type <span id="sort-type-icon"></span></div>
+                <div class="col-sortable" onclick="handleSort('size')" style="justify-content: flex-end;">Size <span id="sort-size-icon"></span></div>
+            </div>
+
             <div id="files" class="grid-view">
                 <div id="initial-loader" style="grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center;">
                     <div style="width: 34px; height: 34px; border: 3px solid rgba(108, 92, 231, 0.2); border-top-color: #6c5ce7; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 14px;"></div>
@@ -893,10 +1344,12 @@ public static class FileManagerWebApp
                 </div>
             </div>
         </div>
+
+        <!-- Right Split Preview Pane -->
         <div class="preview-pane" id="preview-pane">
             <h2>Preview</h2>
             <div class="preview-content" id="preview-content">
-                Select a file to preview.<br><br>💡 Double-click any file to open it in VS Code!
+                Select a file to preview.<br><br>💡 Tap <strong>Spacebar</strong> for Quick Look or double-click to open in VS Code!
             </div>
         </div>
     </div>
@@ -905,102 +1358,438 @@ public static class FileManagerWebApp
     <div class="status-bar">
         <span id="status-items-count">0 items</span>
         <span id="status-selected-info">No selection</span>
-        <span style="margin-left: auto; opacity: 0.85; font-size: 11px;">VenEl File Manager &bull; <a href="https://www.linkedin.com/in/venkateshellur/" target="_blank" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Venkatesh Ellur</a></span>
+        <span style="margin-left: auto; opacity: 0.85; font-size: 11px;">
+            VenEl File Manager &bull; <a href="https://www.linkedin.com/in/venkateshellur/" target="_blank" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Venkatesh Ellur</a>
+        </span>
     </div>
 
-    <!-- Right Click Context Menu -->
+    <!-- Context Menu -->
     <div id="context-menu" class="context-menu">
         <div class="context-item" id="ctx-open" onclick="openSelectedItemInEditor()">
-            <i>🚀</i> Open in VS Code
+            <i>🚀</i> <span>Open in Editor</span> <span class="shortcut">Enter</span>
+        </div>
+        <div class="context-item" id="ctx-quicklook" onclick="toggleQuickLook()">
+            <i>👁️</i> <span>Quick Look</span> <span class="shortcut">Space</span>
+        </div>
+        <div class="context-item" id="ctx-terminal-item" onclick="openTerminalAtSelection()">
+            <i>💻</i> <span>Open in Terminal</span>
         </div>
         <div class="context-divider" id="ctx-div-1"></div>
         <div class="context-item" id="ctx-rename" onclick="renameSelectedItem()">
-            <i>✏️</i> Rename <span class="shortcut">F2</span>
+            <i>✏️</i> <span>Rename</span> <span class="shortcut">F2</span>
         </div>
         <div class="context-item" id="ctx-copy" onclick="copySelectedItem()">
-            <i>📋</i> Copy <span class="shortcut">Ctrl+C</span>
+            <i>📋</i> <span>Copy</span> <span class="shortcut">Ctrl+C</span>
         </div>
         <div class="context-item" id="ctx-cut" onclick="cutSelectedItem()">
-            <i>✂️</i> Cut <span class="shortcut">Ctrl+X</span>
+            <i>✂️</i> <span>Cut</span> <span class="shortcut">Ctrl+X</span>
         </div>
         <div class="context-item" id="ctx-paste" onclick="pasteClipboardItem()">
-            <i>📥</i> Paste <span class="shortcut">Ctrl+V</span>
+            <i>📥</i> <span>Paste</span> <span class="shortcut">Ctrl+V</span>
         </div>
         <div class="context-divider"></div>
         <div class="context-item" id="ctx-new-folder" onclick="showNewFolderModal()">
-            <i>📁</i> New Folder
+            <i>📁</i> <span>New Folder</span>
         </div>
         <div class="context-item" id="ctx-new-file" onclick="showNewFileModal()">
-            <i>📄</i> New File
+            <i>📄</i> <span>New File</span>
         </div>
-        <div class="context-divider" id="ctx-div-2"></div>
-        <div class="context-item danger" id="ctx-delete" onclick="deleteSelectedItem()">
-            <i>🗑️</i> Delete <span class="shortcut">Del</span>
-        </div>
-        <div class="context-divider" id="ctx-div-3"></div>
+        <div class="context-divider"></div>
         <div class="context-item" id="ctx-properties" onclick="showPropertiesModal()">
-            <i>ℹ️</i> Properties
+            <i>ℹ️</i> <span>Properties</span> <span class="shortcut">Alt+Enter</span>
+        </div>
+        <div class="context-item danger" id="ctx-delete" onclick="deleteSelectedItem()">
+            <i>🗑️</i> <span>Delete</span> <span class="shortcut">Del</span>
         </div>
     </div>
 
-    <!-- Modal Dialogs -->
-    <div id="modal-overlay" class="modal-overlay" onclick="handleModalOverlayClick(event)">
-        <div class="modal-box" id="modal-box" onclick="event.stopPropagation()">
-            <div class="modal-title" id="modal-title">Title</div>
-            <div id="modal-body"></div>
-            <div class="modal-actions" id="modal-actions"></div>
+    <!-- Modals -->
+    <!-- New Folder Modal -->
+    <div class="modal-overlay" id="modal-new-folder">
+        <div class="modal-box">
+            <div class="modal-title"><i>📁</i> Create New Folder</div>
+            <input type="text" id="input-new-folder" class="modal-input" placeholder="Folder name..." onkeypress="handleModalKey(event, createFolder)" />
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button class="modal-btn confirm" onclick="createFolder()">Create Folder</button>
+            </div>
         </div>
     </div>
 
-    <!-- Toast Notifications Container -->
-    <div id="toast-container" class="toast-container"></div>
+    <!-- New File Modal -->
+    <div class="modal-overlay" id="modal-new-file">
+        <div class="modal-box">
+            <div class="modal-title"><i>📄</i> Create New File</div>
+            <input type="text" id="input-new-file" class="modal-input" placeholder="File name (e.g. index.ts)..." onkeypress="handleModalKey(event, createFile)" />
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button class="modal-btn confirm" onclick="createFile()">Create File</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Modal -->
+    <div class="modal-overlay" id="modal-rename">
+        <div class="modal-box">
+            <div class="modal-title"><i>✏️</i> Rename Item</div>
+            <input type="text" id="input-rename" class="modal-input" placeholder="New name..." onkeypress="handleModalKey(event, submitRename)" />
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button class="modal-btn confirm" onclick="submitRename()">Rename</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="modal-delete">
+        <div class="modal-box">
+            <div class="modal-title" style="color: var(--danger);"><i>🗑️</i> Delete Confirmation</div>
+            <div id="delete-prompt-text" style="font-size: 13px; color: var(--text-main); line-height: 1.5;"></div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button class="modal-btn danger" onclick="submitDelete()">Delete Permanently</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Properties Dialog (Windows Alt+Enter / macOS Get Info) -->
+    <div class="modal-overlay" id="modal-properties" onclick="hideModals()">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <div class="modal-title"><i id="prop-icon">📄</i> <span id="prop-title">Item Properties</span></div>
+            <div class="prop-grid">
+                <div class="prop-label">Full Path:</div>
+                <div class="prop-value" id="prop-path" style="font-family: monospace; font-size: 11px;"></div>
+                <div class="prop-label">Type:</div>
+                <div class="prop-value" id="prop-type"></div>
+                <div class="prop-label">Size:</div>
+                <div class="prop-value" id="prop-size"></div>
+                <div class="prop-label" id="prop-contains-label" style="display: none;">Contains:</div>
+                <div class="prop-value" id="prop-contains" style="display: none;"></div>
+                <div class="prop-label">Modified:</div>
+                <div class="prop-value" id="prop-modified"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="copyPathToClipboard(selectedPropPath)">📋 Copy Full Path</button>
+                <button class="modal-btn confirm" onclick="hideModals()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- macOS Quick Look Modal (Spacebar) -->
+    <div class="modal-overlay" id="modal-quick-look" onclick="closeQuickLook()">
+        <div class="modal-box quick-look-box" onclick="event.stopPropagation()">
+            <div class="modal-title" style="justify-content: space-between;">
+                <span id="ql-title">Quick Look</span>
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">Spacebar to close</span>
+            </div>
+            <div class="quick-look-body" id="ql-body"></div>
+            <div class="modal-actions">
+                <button class="modal-btn confirm" onclick="openSelectedItemInEditor()">🚀 Open in Editor</button>
+                <button class="modal-btn cancel" onclick="closeQuickLook()">Close</button>
+            </div>
+        </div>
+    </div>
 
     <script>
-        let currentPath = ".";
-        let isWindows = false;
-        let currentView = "grid";
-        let previewVisible = true;
+        let currentPath = '.';
         let currentItems = [];
         let selectedItem = null;
-        let clipboard = null; // { action: 'copy'|'cut', path: string, name: string }
+        let selectedPropPath = '';
+        let clipboard = null;
+        let isWindows = false;
+        let systemRoots = [];
 
-        function showToast(message, icon) {
-            icon = icon || 'ℹ️';
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.innerHTML = '<span>' + icon + '</span> <span>' + message + '</span>';
-            container.appendChild(toast);
-            setTimeout(function() {
-                toast.style.opacity = '0';
-                toast.style.transition = 'opacity 0.3s ease';
-                setTimeout(function() { toast.remove(); }, 300);
-            }, 3000);
+        // Navigation History Stack
+        let navHistory = [];
+        let navHistoryIndex = -1;
+
+        // Sorting State
+        let currentSort = { field: 'name', asc: true };
+
+        // ══════════════════════════════════════════════════════════
+        // 🧭 NAVIGATION & HISTORY
+        // ══════════════════════════════════════════════════════════
+        function navigateTo(targetPath, isHistoryAction = false) {
+            closePathDropdown();
+            if (!isHistoryAction && targetPath) {
+                // If user branched from previous history index, truncate forward history
+                if (navHistoryIndex >= 0 && navHistoryIndex < navHistory.length - 1) {
+                    navHistory = navHistory.slice(0, navHistoryIndex + 1);
+                }
+                if (navHistory[navHistory.length - 1] !== targetPath) {
+                    navHistory.push(targetPath);
+                    navHistoryIndex = navHistory.length - 1;
+                }
+                updateNavButtons();
+            }
+            loadFiles(targetPath);
         }
 
-        function setView(view) {
-            currentView = view;
-            const filesContainer = document.getElementById('files');
-            if (view === 'grid') {
-                filesContainer.className = 'grid-view';
-                document.getElementById('btn-grid').classList.add('active');
-                document.getElementById('btn-list').classList.remove('active');
+        function goBack() {
+            if (navHistoryIndex > 0) {
+                navHistoryIndex--;
+                updateNavButtons();
+                loadFiles(navHistory[navHistoryIndex]);
+            }
+        }
+
+        function goForward() {
+            if (navHistoryIndex < navHistory.length - 1) {
+                navHistoryIndex++;
+                updateNavButtons();
+                loadFiles(navHistory[navHistoryIndex]);
+            }
+        }
+
+        function updateNavButtons() {
+            const btnBack = document.getElementById('btn-back');
+            const btnForward = document.getElementById('btn-forward');
+            if (btnBack) btnBack.disabled = (navHistoryIndex <= 0);
+            if (btnForward) btnForward.disabled = (navHistoryIndex >= navHistory.length - 1);
+        }
+
+        function goUp() {
+            const sep = isWindows ? '\\' : '/';
+            if (!currentPath || currentPath === '.') return;
+            const parts = currentPath.split(sep).filter(function(p) { return p !== ''; });
+            if (parts.length <= 1) {
+                navigateTo(isWindows ? parts[0] + '\\' : '/');
+                return;
+            }
+            parts.pop();
+            const parent = isWindows ? (parts.join('\\') + (parts.length === 1 ? '\\' : '')) : ('/' + parts.join('/'));
+            navigateTo(parent);
+        }
+
+        function goHome() {
+            const homeRoot = systemRoots.find(function(r) { return r.type === 'Home'; });
+            navigateTo(homeRoot ? homeRoot.path : '.');
+        }
+
+        function quickNav(name) {
+            const match = systemRoots.find(function(r) { return r.type === name || r.name.toLowerCase().includes(name.toLowerCase()); });
+            if (match) {
+                navigateTo(match.path);
             } else {
-                filesContainer.className = 'list-view';
-                document.getElementById('btn-list').classList.add('active');
-                document.getElementById('btn-grid').classList.remove('active');
+                goHome();
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 🍞 INTERACTIVE BREADCRUMBS
+        // ══════════════════════════════════════════════════════════
+        function renderBreadcrumbs() {
+            const container = document.getElementById('path-breadcrumbs');
+            if (!container) return;
+            const sep = isWindows ? '\\' : '/';
+            if (!currentPath || currentPath === '.') {
+                container.innerHTML = '<span class="crumb current">Loading...</span>';
+                return;
+            }
+
+            const parts = currentPath.split(sep).filter(function(p) { return p !== ''; });
+            let html = '';
+
+            const rootPath = isWindows ? (currentPath.slice(0, 3)) : '/';
+            const rootLabel = isWindows ? rootPath : '/ (Root)';
+            html += '<span class="crumb' + (parts.length === 0 ? ' current' : '') + '" onclick="event.stopPropagation(); navigateTo(\'' + escapePath(rootPath) + '\')">' +
+                    '<i>' + (isWindows ? '💻' : '📁') + '</i> ' + escapeHtml(rootLabel) + '</span>';
+
+            let accum = isWindows ? rootPath : '';
+            for (let i = 0; i < parts.length; i++) {
+                if (isWindows && i === 0 && parts[0].endsWith(':')) continue;
+                accum = isWindows ? (accum.endsWith('\\') ? accum + parts[i] : accum + '\\' + parts[i]) : accum + '/' + parts[i];
+                const isCurrent = (i === parts.length - 1);
+                html += '<span class="crumb-sep">›</span>';
+                html += '<span class="crumb' + (isCurrent ? ' current' : '') + '" onclick="event.stopPropagation(); navigateTo(\'' + escapePath(accum) + '\')">' +
+                        escapeHtml(parts[i]) + '</span>';
+            }
+            container.innerHTML = html;
+        }
+
+        function handlePathBarClick(e) {
+            if (e.target.id === 'btn-path-dropdown' || e.target.closest('#btn-path-dropdown')) return;
+            if (e.target.classList.contains('crumb')) return;
+            enterPathEditMode();
+        }
+
+        function enterPathEditMode() {
+            const breadcrumbs = document.getElementById('path-breadcrumbs');
+            const input = document.getElementById('path');
+            if (breadcrumbs && input) {
+                breadcrumbs.style.display = 'none';
+                input.style.display = 'block';
+                input.value = currentPath;
+                input.focus();
+                input.select();
+            }
+        }
+
+        function exitPathEditMode() {
+            const breadcrumbs = document.getElementById('path-breadcrumbs');
+            const input = document.getElementById('path');
+            if (breadcrumbs && input) {
+                input.style.display = 'none';
+                breadcrumbs.style.display = 'flex';
+            }
+        }
+
+        function handlePathEnter(e) {
+            if (e.key === 'Enter') {
+                const target = document.getElementById('path').value.trim();
+                exitPathEditMode();
+                if (target) navigateTo(target);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // ◧ QUICK ACCESS SIDEBAR
+        // ══════════════════════════════════════════════════════════
+        function toggleSidebarRail() {
+            const sidebar = document.getElementById('quick-access-sidebar');
+            const btn = document.getElementById('btn-rail-toggle');
+            if (sidebar) {
+                sidebar.classList.toggle('collapsed');
+                if (btn) btn.classList.toggle('active', !sidebar.classList.contains('collapsed'));
+            }
+        }
+
+        function renderQuickAccessDrives() {
+            const container = document.getElementById('quick-drives');
+            if (!container) return;
+            let html = '';
+            for (let i = 0; i < systemRoots.length; i++) {
+                const root = systemRoots[i];
+                if (root.type === 'Home' || root.type === 'Desktop' || root.type === 'Documents' || root.type === 'Downloads') continue;
+                html += '<div class="quick-item" onclick="navigateTo(\'' + escapePath(root.path) + '\')">' +
+                        '<i>' + (root.type === 'Drive' ? '💻' : '📁') + '</i> ' +
+                        '<span>' + escapeHtml(root.name) + '</span>' +
+                        '</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 🎨 VISUAL FILE TYPES & BADGES
+        // ══════════════════════════════════════════════════════════
+        function getFileVisual(name, isDir) {
+            if (isDir) {
+                return { icon: '📁', badge: '', color: '#ffbe76', isImage: false, isDir: true, typeLabel: 'File folder' };
+            }
+            const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+            switch(ext) {
+                case 'cs': return { icon: '🔷', badge: 'C#', color: '#68217a', isImage: false, typeLabel: 'C# Source File' };
+                case 'ts': return { icon: '🟦', badge: 'TS', color: '#3178c6', isImage: false, typeLabel: 'TypeScript File' };
+                case 'js': return { icon: '🟨', badge: 'JS', color: '#f7df1e', isImage: false, typeLabel: 'JavaScript File' };
+                case 'py': return { icon: '🐍', badge: 'PY', color: '#3776ab', isImage: false, typeLabel: 'Python Script' };
+                case 'json': return { icon: '🟧', badge: '{}', color: '#e67e22', isImage: false, typeLabel: 'JSON File' };
+                case 'html': return { icon: '🌐', badge: '<>', color: '#e44d26', isImage: false, typeLabel: 'HTML Document' };
+                case 'css': return { icon: '🎨', badge: '#', color: '#264de4', isImage: false, typeLabel: 'CSS Stylesheet' };
+                case 'md': return { icon: '📝', badge: 'MD', color: '#4a90e2', isImage: false, typeLabel: 'Markdown Document' };
+                case 'sql': return { icon: '🗄️', badge: 'SQL', color: '#00cec9', isImage: false, typeLabel: 'SQL Query File' };
+                case 'sh': case 'bash': case 'zsh': return { icon: '⚡', badge: 'SH', color: '#2ecc71', isImage: false, typeLabel: 'Shell Script' };
+                case 'xml': case 'yaml': case 'yml': return { icon: '⚙️', badge: 'CFG', color: '#9b59b6', isImage: false, typeLabel: 'Configuration File' };
+                case 'png': case 'jpg': case 'jpeg': case 'gif': case 'webp': case 'svg': case 'ico':
+                    return { icon: '🖼️', badge: ext.toUpperCase(), color: '#e056fd', isImage: true, typeLabel: ext.toUpperCase() + ' Image' };
+                case 'mp4': case 'mov': case 'mkv': case 'webm':
+                    return { icon: '🎬', badge: 'VID', color: '#eb4d4b', isImage: false, typeLabel: 'Video File' };
+                case 'mp3': case 'wav': case 'flac': case 'm4a':
+                    return { icon: '🎵', badge: 'AUD', color: '#00cec9', isImage: false, typeLabel: 'Audio File' };
+                case 'zip': case 'tar': case 'gz': case 'rar': case '7z':
+                    return { icon: '📦', badge: 'ZIP', color: '#f0932b', isImage: false, typeLabel: 'Compressed Archive' };
+                case 'pdf': return { icon: '📕', badge: 'PDF', color: '#e74c3c', isImage: false, typeLabel: 'PDF Document' };
+                case 'txt': case 'log': return { icon: '📄', badge: 'TXT', color: '#95a5a6', isImage: false, typeLabel: 'Text Document' };
+                case 'doc': case 'docx': return { icon: '📘', badge: 'DOC', color: '#2980b9', isImage: false, typeLabel: 'Word Document' };
+                case 'xls': case 'xlsx': case 'csv': return { icon: '📊', badge: 'XLS', color: '#27ae60', isImage: false, typeLabel: 'Spreadsheet' };
+                default: return { icon: '📄', badge: ext ? ext.slice(0, 3).toUpperCase() : '', color: '#888899', isImage: false, typeLabel: (ext ? ext.toUpperCase() + ' File' : 'File') };
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 📊 COLUMN SORTING (LIST VIEW)
+        // ══════════════════════════════════════════════════════════
+        function handleSort(field) {
+            if (currentSort.field === field) {
+                currentSort.asc = !currentSort.asc;
+            } else {
+                currentSort.field = field;
+                currentSort.asc = true;
+            }
+            updateSortIndicators();
+            applySortAndRender();
+        }
+
+        function updateSortIndicators() {
+            const fields = ['name', 'modified', 'type', 'size'];
+            fields.forEach(function(f) {
+                const el = document.getElementById('sort-' + f + '-icon');
+                if (el) {
+                    if (currentSort.field === f) {
+                        el.innerText = currentSort.asc ? '▲' : '▼';
+                    } else {
+                        el.innerText = '';
+                    }
+                }
+            });
+        }
+
+        function applySortAndRender() {
+            currentItems.sort(function(a, b) {
+                const aIsDir = a.type === 'Directory';
+                const bIsDir = b.type === 'Directory';
+                // Directories always on top (like Explorer/Finder)
+                if (aIsDir && !bIsDir) return -1;
+                if (!aIsDir && bIsDir) return 1;
+
+                let valA = a[currentSort.field] || '';
+                let valB = b[currentSort.field] || '';
+
+                if (currentSort.field === 'name') {
+                    return currentSort.asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                } else if (currentSort.field === 'size') {
+                    return currentSort.asc ? (a.size - b.size) : (b.size - a.size);
+                } else if (currentSort.field === 'modified') {
+                    const dateA = new Date(a.modified || 0).getTime();
+                    const dateB = new Date(b.modified || 0).getTime();
+                    return currentSort.asc ? (dateA - dateB) : (dateB - dateA);
+                } else if (currentSort.field === 'type') {
+                    return currentSort.asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+                return 0;
+            });
+            renderItems(currentItems);
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 🖼️ RENDER ITEMS & VIEWS
+        // ══════════════════════════════════════════════════════════
+        function setView(viewType) {
+            const el = document.getElementById('files');
+            const listHeader = document.getElementById('list-header');
+            const btnList = document.getElementById('btn-list');
+            const btnGrid = document.getElementById('btn-grid');
+
+            if (viewType === 'list') {
+                el.className = 'list-view';
+                if (listHeader) listHeader.style.display = 'grid';
+                btnList.classList.add('active');
+                btnGrid.classList.remove('active');
+            } else {
+                el.className = 'grid-view';
+                if (listHeader) listHeader.style.display = 'none';
+                btnGrid.classList.add('active');
+                btnList.classList.remove('active');
             }
         }
 
         function togglePreview() {
-            previewVisible = !previewVisible;
             const pane = document.getElementById('preview-pane');
             const btn = document.getElementById('btn-preview');
-            if (previewVisible) {
-                pane.style.display = 'flex';
+            pane.classList.toggle('collapsed');
+            if (!pane.classList.contains('collapsed')) {
                 btn.classList.add('active');
+                if (selectedItem) handlePreview(selectedItem.name, selectedItem.type === 'Directory');
             } else {
-                pane.style.display = 'none';
                 btn.classList.remove('active');
             }
         }
@@ -1016,18 +1805,29 @@ public static class FileManagerWebApp
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const isDir = item.type === 'Directory';
-                const icon = isDir ? '📁' : '📄';
+                const visual = getFileVisual(item.name, isDir);
                 const className = isDir ? 'folder' : 'file';
-                const sizeText = !isDir ? formatBytes(item.size) : '';
+                const sizeText = !isDir ? formatBytes(item.size) : '--';
+                const modDate = item.modified ? formatDate(item.modified) : '';
                 const isSelected = selectedItem && selectedItem.name === item.name;
                 const isCut = clipboard && clipboard.action === 'cut' && clipboard.name === item.name;
-                
+
+                const sep = isWindows ? '\\' : '/';
+                const fullItemPath = currentPath.endsWith(sep) ? currentPath + item.name : currentPath + sep + item.name;
+
+                let iconHtml = '<i>' + visual.icon + '</i>';
+                if (visual.isImage) {
+                    iconHtml = '<img src="/api/files/raw?path=' + encodeURIComponent(fullItemPath) + '" class="item-thumb" onerror="this.onerror=null; this.outerHTML=\'<i>🖼️</i>\';"/>';
+                }
+
                 html += '<div class="item ' + className + (isSelected ? ' selected' : '') + (isCut ? ' cut-item' : '') + '" ' +
                         'onclick="handleItemClick(event, \'' + escapePath(item.name) + '\', ' + isDir + ')" ' +
                         'ondblclick="handleDoubleClick(\'' + escapePath(item.name) + '\', ' + isDir + ')" ' +
                         'oncontextmenu="handleItemContextMenu(event, \'' + escapePath(item.name) + '\', ' + isDir + ')">' +
-                        '<i>' + icon + '</i>' +
+                        '<div class="item-icon-wrapper">' + iconHtml + (visual.badge ? '<span class="item-badge">' + visual.badge + '</span>' : '') + '</div>' +
                         '<span class="item-name">' + escapeHtml(item.name) + '</span>' +
+                        '<span class="item-modified">' + modDate + '</span>' +
+                        '<span class="item-type">' + visual.typeLabel + '</span>' +
                         '<span class="item-size">' + sizeText + '</span>' +
                         '</div>';
             }
@@ -1045,15 +1845,17 @@ public static class FileManagerWebApp
                 }
                 const data = await res.json();
                 currentPath = data.currentPath;
-                document.getElementById('path').value = currentPath;
                 isWindows = currentPath.includes('\\');
+                document.getElementById('path').value = currentPath;
+                renderBreadcrumbs();
+                
                 currentItems = data.items;
                 selectedItem = null;
                 
                 document.getElementById('search').value = '';
-                renderItems(currentItems);
+                applySortAndRender();
                 
-                document.getElementById('preview-content').innerHTML = 'Select a file to preview.<br><br>💡 Double-click any file to open it in VS Code!';
+                document.getElementById('preview-content').innerHTML = 'Select a file to preview.<br><br>💡 Tap <strong>Spacebar</strong> for Quick Look or double-click to open in VS Code!';
                 document.querySelector('#preview-pane h2').innerText = 'Preview';
             } catch (err) {
                 console.error(err);
@@ -1092,8 +1894,8 @@ public static class FileManagerWebApp
             document.getElementById('btn-copy').disabled = !hasSelection;
             document.getElementById('btn-rename').disabled = !hasSelection;
             document.getElementById('btn-delete').disabled = !hasSelection;
-            document.getElementById('btn-paste').disabled = !clipboard;
-
+            document.getElementById('btn-properties').disabled = !hasSelection;
+            
             const selectedInfo = document.getElementById('status-selected-info');
             if (selectedItem) {
                 selectedInfo.innerText = 'Selected: ' + selectedItem.name + (selectedItem.type === 'File' ? ' (' + formatBytes(selectedItem.size) + ')' : '');
@@ -1102,152 +1904,287 @@ public static class FileManagerWebApp
             }
         }
 
+        function handleDoubleClick(name, isDir) {
+            const sep = isWindows ? '\\' : '/';
+            const nextPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
+            if (isDir) {
+                navigateTo(nextPath);
+            } else {
+                openSelectedItemInEditor(nextPath);
+            }
+        }
+
         async function handlePreview(name, isDir) {
+            const previewPane = document.getElementById('preview-pane');
+            if (previewPane.classList.contains('collapsed')) return;
+
+            const previewContent = document.getElementById('preview-content');
+            document.querySelector('#preview-pane h2').innerText = name;
+            
             const sep = isWindows ? '\\' : '/';
             const fullPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
-            
-            document.querySelector('#preview-pane h2').innerText = name;
-            const previewContent = document.getElementById('preview-content');
 
             if (isDir) {
-                previewContent.innerHTML = 'Folder selected.<br><br>Double-click to open.';
+                previewContent.innerHTML = '<div style="padding: 10px 0;"><strong>📁 Folder</strong><br><br>Double-click to explore contents.</div>';
                 return;
             }
 
-            const ext = name.split('.').pop().toLowerCase();
-            const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
-            const textExts = ['txt', 'md', 'json', 'cs', 'js', 'ts', 'html', 'css', 'xml', 'log', 'yaml', 'yml', 'sh', 'bat', 'sql', 'py'];
+            const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+            const imgExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
 
-            previewContent.innerHTML = 'Loading preview...';
-
-            if (imageExts.includes(ext)) {
-                previewContent.innerHTML = '<img src="/api/files/raw?path=' + encodeURIComponent(fullPath) + '" alt="preview" />';
-            } else if (textExts.includes(ext)) {
+            if (imgExts.includes(ext)) {
+                previewContent.innerHTML = '<img class="preview-image" src="/api/files/raw?path=' + encodeURIComponent(fullPath) + '" alt="' + escapeHtml(name) + '" /><br><br><div style="font-size: 11px; opacity: 0.7;">Image format: ' + ext.toUpperCase() + '</div>';
+            } else {
+                previewContent.innerHTML = '<div style="opacity: 0.6;">Loading preview...</div>';
                 try {
                     const res = await fetch('/api/files/read?path=' + encodeURIComponent(fullPath));
-                    if (!res.ok) {
-                        previewContent.innerHTML = 'File too large or unreadable.';
-                        return;
+                    if (res.ok) {
+                        const text = await res.text();
+                        const snippet = text.slice(0, 3000);
+                        previewContent.innerHTML = '<pre><code>' + escapeHtml(snippet) + (text.length > 3000 ? '\n\n... (preview truncated)' : '') + '</code></pre>';
+                    } else {
+                        previewContent.innerHTML = '<div style="opacity: 0.6;">Binary or unreadable preview. Double-click to open in VS Code.</div>';
                     }
-                    const text = await res.text();
-                    previewContent.innerHTML = '<pre>' + escapeHtml(text.slice(0, 50000)) + '</pre>';
                 } catch (e) {
-                    previewContent.innerHTML = 'Error loading text preview.';
+                    previewContent.innerHTML = '<div style="opacity: 0.6;">Could not generate preview.</div>';
                 }
-            } else {
-                previewContent.innerHTML = 'Preview not available for this binary file.<br><br>Double-click to open in VS Code!';
             }
         }
 
-        function handleDoubleClick(name, isDir) {
+        // ══════════════════════════════════════════════════════════
+        // 👁️ MAC QUICK LOOK (SPACEBAR)
+        // ══════════════════════════════════════════════════════════
+        async function toggleQuickLook() {
+            const modal = document.getElementById('modal-quick-look');
+            if (modal.style.display === 'flex') {
+                closeQuickLook();
+                return;
+            }
+            if (!selectedItem) {
+                showToast('Select a file to Quick Look', '👁️');
+                return;
+            }
+
             const sep = isWindows ? '\\' : '/';
-            const newPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
+            const fullPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
+            const qlTitle = document.getElementById('ql-title');
+            const qlBody = document.getElementById('ql-body');
+
+            qlTitle.innerText = selectedItem.name;
+            qlBody.innerHTML = '<div style="padding: 30px;"><div class="spinner" style="width: 28px; height: 28px; border: 3px solid rgba(108, 92, 231, 0.2); border-top-color: #6c5ce7; border-radius: 50%; animation: spin 0.8s linear infinite;"></div></div>';
+            modal.style.display = 'flex';
+
+            const isDir = selectedItem.type === 'Directory';
+            const ext = selectedItem.name.includes('.') ? selectedItem.name.split('.').pop().toLowerCase() : '';
+            const imgExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
+
             if (isDir) {
-                loadFiles(newPath);
+                try {
+                    const res = await fetch('/api/files/details?path=' + encodeURIComponent(fullPath));
+                    const data = await res.json();
+                    qlBody.innerHTML = '<div style="text-align: center; padding: 20px;">' +
+                                       '<i style="font-size: 54px; font-style: normal;">📁</i>' +
+                                       '<div style="font-size: 16px; font-weight: 600; margin-top: 8px;">' + escapeHtml(selectedItem.name) + '</div>' +
+                                       '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Contains ' + (data.itemCount || '0') + ' items</div>' +
+                                       '</div>';
+                } catch {
+                    qlBody.innerHTML = '<div style="padding: 20px; font-size: 13px;">📁 Folder: ' + escapeHtml(selectedItem.name) + '</div>';
+                }
+            } else if (imgExts.includes(ext)) {
+                qlBody.innerHTML = '<img src="/api/files/raw?path=' + encodeURIComponent(fullPath) + '" style="max-width: 100%; max-height: 50vh; object-fit: contain; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" />';
             } else {
-                openSelectedItemInEditor(newPath);
+                try {
+                    const res = await fetch('/api/files/read?path=' + encodeURIComponent(fullPath));
+                    if (res.ok) {
+                        const text = await res.text();
+                        qlBody.innerHTML = '<pre style="width: 100%; background: #131317; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #a29bfe; max-height: 50vh; overflow: auto; white-space: pre-wrap;"><code>' + escapeHtml(text.slice(0, 8000)) + '</code></pre>';
+                    } else {
+                        qlBody.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-muted);">Binary file. Press Enter to open in editor.</div>';
+                    }
+                } catch {
+                    qlBody.innerHTML = '<div style="padding: 20px; color: var(--text-muted);">Could not load preview.</div>';
+                }
             }
         }
 
+        function closeQuickLook() {
+            document.getElementById('modal-quick-look').style.display = 'none';
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // ℹ️ PROPERTIES / GET INFO
+        // ══════════════════════════════════════════════════════════
+        async function showPropertiesModal() {
+            hideContextMenu();
+            if (!selectedItem) return;
+            const sep = isWindows ? '\\' : '/';
+            const fullPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
+            selectedPropPath = fullPath;
+
+            try {
+                const res = await fetch('/api/files/details?path=' + encodeURIComponent(fullPath));
+                if (!res.ok) throw new Error();
+                const d = await res.json();
+                
+                const visual = getFileVisual(d.name, d.isDirectory);
+                document.getElementById('prop-icon').innerText = visual.icon;
+                document.getElementById('prop-title').innerText = d.name;
+                document.getElementById('prop-path').innerText = d.path;
+                document.getElementById('prop-type').innerText = visual.typeLabel;
+                document.getElementById('prop-size').innerText = !d.isDirectory ? (formatBytes(d.size) + ' (' + d.size.toLocaleString() + ' bytes)') : '--';
+                
+                const containsLabel = document.getElementById('prop-contains-label');
+                const containsVal = document.getElementById('prop-contains');
+                if (d.isDirectory && typeof d.itemCount !== 'undefined') {
+                    containsLabel.style.display = 'block';
+                    containsVal.style.display = 'block';
+                    containsVal.innerText = d.itemCount + ' items';
+                } else {
+                    containsLabel.style.display = 'none';
+                    containsVal.style.display = 'none';
+                }
+
+                document.getElementById('prop-modified').innerText = formatDate(d.modified);
+                document.getElementById('modal-properties').style.display = 'flex';
+            } catch {
+                showToast('Failed to load item properties', '❌');
+            }
+        }
+
+        function copyPathToClipboard(pathStr) {
+            if (!pathStr) return;
+            navigator.clipboard.writeText(pathStr);
+            showToast('Full path copied to clipboard!', '📋');
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 💻 OPEN IN TERMINAL & EDITOR
+        // ══════════════════════════════════════════════════════════
         function openSelectedItemInEditor(targetPath) {
+            hideContextMenu();
             const sep = isWindows ? '\\' : '/';
             const path = targetPath || (selectedItem ? (currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name) : null);
             if (path) {
-                fetch('/api/files/openInEditor?path=' + encodeURIComponent(path)).catch(function() {});
+                fetch('/api/files/openInEditor?path=' + encodeURIComponent(path));
                 showToast('Opening ' + (selectedItem ? selectedItem.name : 'file') + ' in VS Code...', '🚀');
             }
-            closeContextMenu();
+        }
+
+        function openTerminalAtCurrent() {
+            fetch('/api/files/openInTerminal?path=' + encodeURIComponent(currentPath));
+            showToast('Opening terminal at ' + currentPath, '💻');
+        }
+
+        function openTerminalAtSelection() {
+            hideContextMenu();
+            const sep = isWindows ? '\\' : '/';
+            const p = selectedItem ? (currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name) : currentPath;
+            fetch('/api/files/openInTerminal?path=' + encodeURIComponent(p));
+            showToast('Opening terminal...', '💻');
         }
 
         // ══════════════════════════════════════════════════════════
-        // 📋 CLIPBOARD & FILE CRUD ACTIONS
+        // ✂️ CLIPBOARD (CUT / COPY / PASTE)
         // ══════════════════════════════════════════════════════════
-
         function copySelectedItem() {
+            hideContextMenu();
             if (!selectedItem) return;
             const sep = isWindows ? '\\' : '/';
             const fullPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
             clipboard = { action: 'copy', path: fullPath, name: selectedItem.name };
             updateSelectionState();
-            renderItems(currentItems);
+            document.getElementById('btn-paste').disabled = false;
             showToast('Copied "' + selectedItem.name + '" to clipboard', '📋');
-            closeContextMenu();
         }
 
         function cutSelectedItem() {
+            hideContextMenu();
             if (!selectedItem) return;
             const sep = isWindows ? '\\' : '/';
             const fullPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
             clipboard = { action: 'cut', path: fullPath, name: selectedItem.name };
             updateSelectionState();
+            document.getElementById('btn-paste').disabled = false;
             renderItems(currentItems);
             showToast('Cut "' + selectedItem.name + '" (ready to paste)', '✂️');
-            closeContextMenu();
         }
 
         async function pasteClipboardItem() {
+            hideContextMenu();
             if (!clipboard) return;
+            const endpoint = clipboard.action === 'cut' ? '/api/files/move' : '/api/files/copy';
             try {
-                const endpoint = clipboard.action === 'copy' ? '/api/files/copy' : '/api/files/move';
                 const res = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ source: clipboard.path, destinationDir: currentPath })
                 });
-
                 if (res.ok) {
-                    showToast('Pasted "' + clipboard.name + '" successfully', '📥');
-                    if (clipboard.action === 'cut') {
-                        clipboard = null;
-                    }
+                    showToast((clipboard.action === 'cut' ? 'Moved' : 'Copied') + ' item successfully', '✅');
+                    if (clipboard.action === 'cut') clipboard = null;
+                    document.getElementById('btn-paste').disabled = !clipboard;
                     loadFiles(currentPath);
                 } else {
-                    const err = await res.json();
-                    showToast(err.error || 'Failed to paste item', '❌');
+                    showToast('Failed to paste item', '❌');
                 }
-            } catch (e) {
-                showToast('Paste operation failed', '❌');
-            }
-            closeContextMenu();
-        }
-
-        // ══════════════════════════════════════════════════════════
-        // 🗂️ MODAL DIALOGS (New Folder, New File, Rename, Delete)
-        // ══════════════════════════════════════════════════════════
-
-        function openModal(title, bodyHtml, actionsHtml) {
-            document.getElementById('modal-title').innerHTML = title;
-            document.getElementById('modal-body').innerHTML = bodyHtml;
-            document.getElementById('modal-actions').innerHTML = actionsHtml;
-            document.getElementById('modal-overlay').style.display = 'flex';
-            const input = document.querySelector('.modal-input');
-            if (input) {
-                input.focus();
-                input.select();
+            } catch {
+                showToast('Paste operation error', '❌');
             }
         }
 
-        function closeModal() {
-            document.getElementById('modal-overlay').style.display = 'none';
-        }
-
-        function handleModalOverlayClick(e) {
-            if (e.target.id === 'modal-overlay') closeModal();
-        }
-
+        // ══════════════════════════════════════════════════════════
+        // ✏️ CRUD MODALS (CREATE, RENAME, DELETE)
+        // ══════════════════════════════════════════════════════════
         function showNewFolderModal() {
-            closeContextMenu();
-            openModal(
-                '📁 Create New Folder',
-                '<input type="text" id="modal-folder-name" class="modal-input" placeholder="Folder Name..." value="New Folder" onkeydown="if(event.key===\'Enter\')confirmNewFolder()" />',
-                '<button class="modal-btn" onclick="closeModal()">Cancel</button><button class="modal-btn primary" onclick="confirmNewFolder()">Create</button>'
-            );
+            hideContextMenu();
+            document.getElementById('input-new-folder').value = '';
+            document.getElementById('modal-new-folder').style.display = 'flex';
+            setTimeout(function() { document.getElementById('input-new-folder').focus(); }, 50);
         }
 
-        async function confirmNewFolder() {
-            const input = document.getElementById('modal-folder-name');
-            const name = input ? input.value.trim() : '';
+        function showNewFileModal() {
+            hideContextMenu();
+            document.getElementById('input-new-file').value = '';
+            document.getElementById('modal-new-file').style.display = 'flex';
+            setTimeout(function() { document.getElementById('input-new-file').focus(); }, 50);
+        }
+
+        function renameSelectedItem() {
+            hideContextMenu();
+            if (!selectedItem) return;
+            document.getElementById('input-rename').value = selectedItem.name;
+            document.getElementById('modal-rename').style.display = 'flex';
+            setTimeout(function() {
+                const input = document.getElementById('input-rename');
+                input.focus();
+                const dotIdx = selectedItem.name.lastIndexOf('.');
+                if (dotIdx > 0 && selectedItem.type === 'File') {
+                    input.setSelectionRange(0, dotIdx);
+                } else {
+                    input.select();
+                }
+            }, 50);
+        }
+
+        function deleteSelectedItem() {
+            hideContextMenu();
+            if (!selectedItem) return;
+            document.getElementById('delete-prompt-text').innerHTML = 'Are you sure you want to permanently delete <strong>' + escapeHtml(selectedItem.name) + '</strong>? This action cannot be undone.';
+            document.getElementById('modal-delete').style.display = 'flex';
+        }
+
+        function hideModals() {
+            document.querySelectorAll('.modal-overlay').forEach(function(m) { m.style.display = 'none'; });
+        }
+
+        function handleModalKey(e, confirmFn) {
+            if (e.key === 'Enter') confirmFn();
+        }
+
+        async function createFolder() {
+            const name = document.getElementById('input-new-folder').value.trim();
             if (!name) return;
+            hideModals();
             try {
                 const res = await fetch('/api/files/newFolder', {
                     method: 'POST',
@@ -1255,67 +2192,44 @@ public static class FileManagerWebApp
                     body: JSON.stringify({ currentPath: currentPath, folderName: name })
                 });
                 if (res.ok) {
-                    closeModal();
-                    showToast('Folder "' + name + '" created', '📁');
+                    showToast('Created folder "' + name + '"', '📁');
                     loadFiles(currentPath);
                 } else {
-                    showToast('Failed to create folder', '❌');
+                    showToast('Could not create folder', '❌');
                 }
-            } catch (e) {
+            } catch {
                 showToast('Error creating folder', '❌');
             }
         }
 
-        function showNewFileModal() {
-            closeContextMenu();
-            openModal(
-                '📄 Create New File',
-                '<input type="text" id="modal-file-name" class="modal-input" placeholder="File Name (e.g. notes.txt)..." value="untitled.txt" onkeydown="if(event.key===\'Enter\')confirmNewFile()" />',
-                '<button class="modal-btn" onclick="closeModal()">Cancel</button><button class="modal-btn primary" onclick="confirmNewFile()">Create</button>'
-            );
-        }
-
-        async function confirmNewFile() {
-            const input = document.getElementById('modal-file-name');
-            const name = input ? input.value.trim() : '';
+        async function createFile() {
+            const name = document.getElementById('input-new-file').value.trim();
             if (!name) return;
+            hideModals();
             try {
                 const res = await fetch('/api/files/newFile', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ currentPath: currentPath, fileName: name })
+                    body: JSON.stringify({ currentPath: currentPath, fileName: name, content: '' })
                 });
                 if (res.ok) {
-                    closeModal();
-                    showToast('File "' + name + '" created', '📄');
+                    showToast('Created file "' + name + '"', '📄');
                     loadFiles(currentPath);
                 } else {
-                    showToast('Failed to create file', '❌');
+                    showToast('Could not create file', '❌');
                 }
-            } catch (e) {
+            } catch {
                 showToast('Error creating file', '❌');
             }
         }
 
-        function renameSelectedItem() {
-            if (!selectedItem) return;
-            closeContextMenu();
-            const currentName = selectedItem.name;
-            openModal(
-                '✏️ Rename "' + escapeHtml(currentName) + '"',
-                '<input type="text" id="modal-rename-input" class="modal-input" value="' + escapeHtml(currentName) + '" onkeydown="if(event.key===\'Enter\')confirmRename()" />',
-                '<button class="modal-btn" onclick="closeModal()">Cancel</button><button class="modal-btn primary" onclick="confirmRename()">Rename</button>'
-            );
-        }
-
-        async function confirmRename() {
-            if (!selectedItem) return;
-            const input = document.getElementById('modal-rename-input');
-            const newName = input ? input.value.trim() : '';
-            if (!newName || newName === selectedItem.name) {
-                closeModal();
+        async function submitRename() {
+            const newName = document.getElementById('input-rename').value.trim();
+            if (!newName || !selectedItem || newName === selectedItem.name) {
+                hideModals();
                 return;
             }
+            hideModals();
             const sep = isWindows ? '\\' : '/';
             const oldPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
             try {
@@ -1325,30 +2239,18 @@ public static class FileManagerWebApp
                     body: JSON.stringify({ oldPath: oldPath, newName: newName })
                 });
                 if (res.ok) {
-                    closeModal();
                     showToast('Renamed to "' + newName + '"', '✏️');
                     loadFiles(currentPath);
                 } else {
-                    showToast('Failed to rename item', '❌');
+                    showToast('Rename failed', '❌');
                 }
-            } catch (e) {
+            } catch {
                 showToast('Error renaming item', '❌');
             }
         }
 
-        function deleteSelectedItem() {
-            if (!selectedItem) return;
-            closeContextMenu();
-            const name = selectedItem.name;
-            const isDir = selectedItem.type === 'Directory';
-            openModal(
-                '🗑️ Delete ' + (isDir ? 'Folder' : 'File') + '?',
-                '<p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">Are you sure you want to permanently delete <strong>' + escapeHtml(name) + '</strong>' + (isDir ? ' and all its contents' : '') + '?</p>',
-                '<button class="modal-btn" onclick="closeModal()">Cancel</button><button class="modal-btn danger" onclick="confirmDelete()">Delete</button>'
-            );
-        }
-
-        async function confirmDelete() {
+        async function submitDelete() {
+            hideModals();
             if (!selectedItem) return;
             const sep = isWindows ? '\\' : '/';
             const targetPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
@@ -1359,64 +2261,34 @@ public static class FileManagerWebApp
                     body: JSON.stringify({ targetPath: targetPath })
                 });
                 if (res.ok) {
-                    closeModal();
                     showToast('Deleted "' + selectedItem.name + '"', '🗑️');
+                    selectedItem = null;
                     loadFiles(currentPath);
                 } else {
-                    showToast('Failed to delete item', '❌');
+                    showToast('Delete failed', '❌');
                 }
-            } catch (e) {
+            } catch {
                 showToast('Error deleting item', '❌');
             }
         }
 
-        async function showPropertiesModal() {
-            if (!selectedItem) return;
-            closeContextMenu();
-            const sep = isWindows ? '\\' : '/';
-            const targetPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
-            
-            try {
-                const res = await fetch('/api/files/details?path=' + encodeURIComponent(targetPath));
-                if (res.ok) {
-                    const details = await res.json();
-                    openModal(
-                        'ℹ️ Properties: ' + escapeHtml(details.name),
-                        '<div style="font-size: 12px; display: flex; flex-direction: column; gap: 8px; color: var(--text-muted);">' +
-                        '<div><strong>Name:</strong> ' + escapeHtml(details.name) + '</div>' +
-                        '<div><strong>Type:</strong> ' + (details.isDirectory ? 'Folder' : 'File') + '</div>' +
-                        '<div><strong>Location:</strong> <span style="word-break: break-all;">' + escapeHtml(details.path) + '</span></div>' +
-                        (!details.isDirectory ? '<div><strong>Size:</strong> ' + formatBytes(details.size) + '</div>' : '') +
-                        '<div><strong>Modified:</strong> ' + new Date(details.modified).toLocaleString() + '</div>' +
-                        '</div>',
-                        '<button class="modal-btn primary" onclick="closeModal()">Close</button>'
-                    );
-                }
-            } catch (e) {
-                showToast('Could not fetch file properties', '⚠️');
-            }
-        }
-
         // ══════════════════════════════════════════════════════════
-        // 🖱️ CONTEXT MENUS (Right Click)
+        // 🖱️ CONTEXT MENU
         // ══════════════════════════════════════════════════════════
-
         function handleItemContextMenu(e, name, isDir) {
             e.preventDefault();
             e.stopPropagation();
-            selectedItem = currentItems.find(function(i) { return i.name === name; }) || { name: name, type: isDir ? 'Directory' : 'File' };
-            renderItems(currentItems);
-
-            document.getElementById('ctx-open').style.display = isDir ? 'none' : 'flex';
-            document.getElementById('ctx-div-1').style.display = isDir ? 'none' : 'block';
+            handleItemClick(e, name, isDir);
+            
+            const menu = document.getElementById('context-menu');
+            document.getElementById('ctx-open').style.display = 'flex';
+            document.getElementById('ctx-quicklook').style.display = 'flex';
             document.getElementById('ctx-rename').style.display = 'flex';
             document.getElementById('ctx-copy').style.display = 'flex';
             document.getElementById('ctx-cut').style.display = 'flex';
             document.getElementById('ctx-delete').style.display = 'flex';
-            document.getElementById('ctx-div-2').style.display = 'block';
             document.getElementById('ctx-properties').style.display = 'flex';
-            document.getElementById('ctx-div-3').style.display = 'block';
-            document.getElementById('ctx-paste').style.display = clipboard ? 'flex' : 'none';
+            document.getElementById('ctx-terminal-item').style.display = 'flex';
 
             showContextMenuAt(e.clientX, e.clientY);
         }
@@ -1424,19 +2296,18 @@ public static class FileManagerWebApp
         function handleBackgroundContextMenu(e) {
             e.preventDefault();
             selectedItem = null;
-            renderItems(currentItems);
+            updateSelectionState();
+            document.querySelectorAll('.item.selected').forEach(function(el) { el.classList.remove('selected'); });
 
+            const menu = document.getElementById('context-menu');
             document.getElementById('ctx-open').style.display = 'none';
-            document.getElementById('ctx-div-1').style.display = 'none';
+            document.getElementById('ctx-quicklook').style.display = 'none';
             document.getElementById('ctx-rename').style.display = 'none';
             document.getElementById('ctx-copy').style.display = 'none';
             document.getElementById('ctx-cut').style.display = 'none';
             document.getElementById('ctx-delete').style.display = 'none';
-            document.getElementById('ctx-div-2').style.display = 'none';
             document.getElementById('ctx-properties').style.display = 'none';
-            document.getElementById('ctx-div-3').style.display = 'none';
-
-            document.getElementById('ctx-paste').style.display = clipboard ? 'flex' : 'none';
+            document.getElementById('ctx-terminal-item').style.display = 'flex';
 
             showContextMenuAt(e.clientX, e.clientY);
         }
@@ -1444,106 +2315,25 @@ public static class FileManagerWebApp
         function showContextMenuAt(x, y) {
             const menu = document.getElementById('context-menu');
             menu.style.display = 'flex';
-            
-            const menuWidth = 190;
-            const menuHeight = 240;
-            const posX = (x + menuWidth > window.innerWidth) ? window.innerWidth - menuWidth - 10 : x;
-            const posY = (y + menuHeight > window.innerHeight) ? window.innerHeight - menuHeight - 10 : y;
-
-            menu.style.left = posX + 'px';
-            menu.style.top = posY + 'px';
+            const maxX = window.innerWidth - menu.offsetWidth - 10;
+            const maxY = window.innerHeight - menu.offsetHeight - 10;
+            menu.style.left = Math.min(x, maxX) + 'px';
+            menu.style.top = Math.min(y, maxY) + 'px';
         }
 
-        function closeContextMenu() {
+        function hideContextMenu() {
             document.getElementById('context-menu').style.display = 'none';
         }
 
-        document.addEventListener('click', closeContextMenu);
-
         // ══════════════════════════════════════════════════════════
-        // ⌨️ KEYBOARD SHORTCUTS
+        // 📂 SYSTEM ROOTS & DROPDOWN
         // ══════════════════════════════════════════════════════════
-
-        document.addEventListener('keydown', function(e) {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                if (e.key === 'Escape') closeModal();
-                return;
-            }
-
-            if (e.key === 'Escape') {
-                closeContextMenu();
-                closeModal();
-            } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (selectedItem) deleteSelectedItem();
-            } else if (e.key === 'F2') {
-                if (selectedItem) renameSelectedItem();
-            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-                if (selectedItem) copySelectedItem();
-            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
-                if (selectedItem) cutSelectedItem();
-            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-                if (clipboard) pasteClipboardItem();
-            }
-        });
-
-        // ══════════════════════════════════════════════════════════
-        // 🧭 PATH & NAVIGATION
-        // ══════════════════════════════════════════════════════════
-
-        function goUp() {
-            const sep = isWindows ? '\\' : '/';
-            if (!isWindows && currentPath === '/') return;
-
-            const parts = currentPath.split(sep);
-            parts.pop();
-            let newPath = parts.join(sep);
-            
-            if (newPath === '') newPath = sep;
-            if (isWindows && newPath.endsWith(':')) newPath += '\\';
-            
-            loadFiles(newPath);
-        }
-
-        function goHome() {
-            loadFiles('.');
-        }
-
-        function handlePathEnter(e) {
-            if (e.key === 'Enter') {
-                loadFiles(e.target.value);
-            }
-        }
-
-        function formatBytes(bytes) {
-            if (!bytes || bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-        }
-
-        function escapeHtml(unsafe) {
-            if (!unsafe) return '';
-            return unsafe
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-        }
-
-        function escapePath(path) {
-            if (!path) return '';
-            return path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-        }
-
-        let systemRoots = [];
-
         async function fetchRoots() {
             try {
                 const res = await fetch('/api/files/roots');
                 if (res.ok) {
                     systemRoots = await res.json();
+                    renderQuickAccessDrives();
                 }
             } catch (e) {
                 console.error('Failed to load roots', e);
@@ -1622,10 +2412,14 @@ public static class FileManagerWebApp
         function selectDropdownPath(targetPath, e) {
             if (e && e.stopPropagation) e.stopPropagation();
             closePathDropdown();
-            loadFiles(targetPath);
+            navigateTo(targetPath);
         }
 
+        // ══════════════════════════════════════════════════════════
+        // ⌨️ GLOBAL EVENT LISTENERS & SHORTCUTS
+        // ══════════════════════════════════════════════════════════
         document.addEventListener('click', function(e) {
+            hideContextMenu();
             const container = document.querySelector('.path-bar-container');
             if (container && !container.contains(e.target)) {
                 closePathDropdown();
@@ -1633,18 +2427,152 @@ public static class FileManagerWebApp
         });
 
         document.addEventListener('keydown', function(e) {
+            const isEditing = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+            
             if (e.key === 'Escape') {
                 closePathDropdown();
-                hideNewFolderModal();
-                hideNewFileModal();
-                hideRenameModal();
+                hideModals();
                 hideContextMenu();
+                closeQuickLook();
+                exitPathEditMode();
+                return;
+            }
+
+            if (isEditing) return;
+
+            // Spacebar: Quick Look (Finder style)
+            if (e.code === 'Space') {
+                e.preventDefault();
+                toggleQuickLook();
+                return;
+            }
+
+            // Alt+Left: Back
+            if (e.altKey && e.key === 'ArrowLeft') {
+                e.preventDefault();
+                goBack();
+                return;
+            }
+
+            // Alt+Right: Forward
+            if (e.altKey && e.key === 'ArrowRight') {
+                e.preventDefault();
+                goForward();
+                return;
+            }
+
+            // Alt+Up: Up
+            if (e.altKey && e.key === 'ArrowUp') {
+                e.preventDefault();
+                goUp();
+                return;
+            }
+
+            // F2: Rename
+            if (e.key === 'F2') {
+                e.preventDefault();
+                renameSelectedItem();
+                return;
+            }
+
+            // Delete: Delete
+            if (e.key === 'Delete') {
+                e.preventDefault();
+                deleteSelectedItem();
+                return;
+            }
+
+            // Enter: Open in editor or enter folder
+            if (e.key === 'Enter' && selectedItem) {
+                e.preventDefault();
+                handleDoubleClick(selectedItem.name, selectedItem.type === 'Directory');
+                return;
+            }
+
+            // Alt+Enter: Properties
+            if (e.altKey && e.key === 'Enter') {
+                e.preventDefault();
+                showPropertiesModal();
+                return;
+            }
+
+            // Ctrl+B / Cmd+B: Toggle Sidebar Rail
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+                e.preventDefault();
+                toggleSidebarRail();
+                return;
+            }
+
+            // Ctrl+C: Copy
+            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+                copySelectedItem();
+                return;
+            }
+
+            // Ctrl+X: Cut
+            if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
+                cutSelectedItem();
+                return;
+            }
+
+            // Ctrl+V: Paste
+            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+                pasteClipboardItem();
+                return;
             }
         });
 
+        // ══════════════════════════════════════════════════════════
+        // 🛠️ UTILITIES
+        // ══════════════════════════════════════════════════════════
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            try {
+                const d = new Date(dateStr);
+                return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+            } catch {
+                return dateStr;
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function escapePath(path) {
+            if (!path) return '';
+            return path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        function showToast(message, icon = '💡') {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = '<span style="font-size: 16px;">' + icon + '</span><span>' + escapeHtml(message) + '</span>';
+            document.body.appendChild(toast);
+
+            setTimeout(function() {
+                toast.style.transition = 'opacity 0.25s, transform 0.25s';
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(15px)';
+                setTimeout(function() { toast.remove(); }, 250);
+            }, 2500);
+        }
+
         // Initialize
         fetchRoots();
-        loadFiles('.');
+        navigateTo('.');
     </script>
 </body>
 </html>
