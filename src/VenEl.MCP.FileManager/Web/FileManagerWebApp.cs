@@ -98,9 +98,29 @@ public static class FileManagerWebApp
                 ".gif" => "image/gif",
                 ".svg" => "image/svg+xml",
                 ".webp" => "image/webp",
+                ".ico" => "image/x-icon",
+                ".bmp" => "image/bmp",
+                ".pdf" => "application/pdf",
+                ".mp3" => "audio/mpeg",
+                ".wav" => "audio/wav",
+                ".ogg" => "audio/ogg",
+                ".m4a" => "audio/mp4",
+                ".aac" => "audio/aac",
+                ".flac" => "audio/flac",
+                ".mp4" => "video/mp4",
+                ".webm" => "video/webm",
+                ".mov" => "video/quicktime",
+                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".xls" => "application/vnd.ms-excel",
+                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".csv" => "text/csv; charset=utf-8",
+                ".tsv" => "text/tab-separated-values; charset=utf-8",
+                ".txt" => "text/plain; charset=utf-8",
+                ".json" => "application/json",
+                ".md" => "text/markdown; charset=utf-8",
                 _ => "application/octet-stream"
             };
-            return Results.File(path, mimeType);
+            return Results.File(path, mimeType, enableRangeProcessing: true);
         });
 
         // 4. Roots / Drives
@@ -621,16 +641,145 @@ public static class FileManagerWebApp
             overflow: hidden;
         }
         
+        /* ══════════════════════════════════════════════════════════ */
+        /* 🗂️ MULTI-TAB STRIP                                      */
+        /* ══════════════════════════════════════════════════════════ */
+        .tabs-bar {
+            display: flex;
+            align-items: flex-end;
+            height: 38px;
+            min-height: 38px;
+            max-height: 38px;
+            background: #0d0d11;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 0 10px;
+            gap: 4px;
+            position: relative;
+            z-index: 6050;
+            user-select: none;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        .tabs-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 100%;
+            flex: 0 1 auto;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+        }
+        .tabs-container::-webkit-scrollbar {
+            height: 3px;
+        }
+        .tabs-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 2px;
+        }
+        .tab-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            height: 32px;
+            padding: 0 8px 0 12px;
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            min-width: 90px;
+            max-width: 190px;
+            transition: all 0.15s ease;
+            position: relative;
+            box-sizing: border-box;
+        }
+        .tab-item:hover {
+            background: rgba(255, 255, 255, 0.07);
+            color: var(--text-main);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+        .tab-item.active {
+            background: #141418;
+            color: #ffffff;
+            font-weight: 600;
+            border-color: rgba(255, 255, 255, 0.14);
+            border-top: 2px solid var(--accent);
+            box-shadow: 0 -2px 10px rgba(108, 92, 231, 0.18);
+        }
+        .tab-icon {
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .tab-title {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+        .tab-close {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            font-size: 10px;
+            opacity: 0.45;
+            transition: all 0.15s ease;
+            margin-left: 2px;
+            flex-shrink: 0;
+        }
+        .tab-item:hover .tab-close {
+            opacity: 0.8;
+        }
+        .tab-close:hover {
+            opacity: 1 !important;
+            background: rgba(235, 77, 75, 0.25);
+            color: #ff7675;
+        }
+        .btn-new-tab {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            margin-bottom: 2px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+        .btn-new-tab:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            transform: scale(1.05);
+        }
+
         /* Header / Address Bar with Top Stacking Context */
         header {
             position: relative;
             z-index: 6000;
-            padding: 8px 16px;
+            height: 48px;
+            min-height: 48px;
+            max-height: 48px;
+            flex-shrink: 0;
+            padding: 0 16px;
             background: #141418;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             gap: 10px;
+            box-sizing: border-box;
         }
         .dropdown-backdrop {
             position: fixed;
@@ -772,19 +921,33 @@ public static class FileManagerWebApp
         .toolbar {
             position: relative;
             z-index: 100;
-            padding: 5px 16px;
+            height: 42px;
+            min-height: 42px;
+            max-height: 42px;
+            flex-shrink: 0;
+            padding: 0 16px;
             background: rgba(0, 0, 0, 0.22);
             border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 8px;
+            box-sizing: border-box;
             overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .toolbar::-webkit-scrollbar {
+            display: none;
+            height: 0;
+            width: 0;
         }
         .toolbar-group {
             display: flex;
             align-items: center;
             gap: 5px;
+            flex-shrink: 0;
         }
         .toolbar-divider {
             width: 1px;
@@ -881,30 +1044,35 @@ public static class FileManagerWebApp
             position: relative;
             z-index: 10;
             display: flex;
-            flex-grow: 1;
+            flex: 1 1 0;
+            min-height: 0;
             overflow: hidden;
+            box-sizing: border-box;
         }
 
         /* Quick Access / Favorites Sidebar Rail */
         .quick-access-sidebar {
             width: 195px;
-            min-width: 195px;
+            min-width: 130px;
+            max-width: 480px;
             background: var(--sidebar-bg);
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             padding: 10px 8px;
-            transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.2s, padding 0.2s, opacity 0.2s;
+            transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
             overflow-y: auto;
             overflow-x: hidden;
+            box-sizing: border-box;
+            flex-shrink: 0;
         }
         .quick-access-sidebar.collapsed {
-            width: 0;
-            min-width: 0;
-            padding: 0;
-            border-right: none;
-            opacity: 0;
-            pointer-events: none;
+            width: 0 !important;
+            min-width: 0 !important;
+            padding: 0 !important;
+            border-right: none !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
         }
         .sidebar-group-title {
             font-size: 10px;
@@ -1124,21 +1292,24 @@ public static class FileManagerWebApp
         /* Preview Pane */
         .preview-pane {
             width: 320px;
-            min-width: 320px;
+            min-width: 180px;
+            max-width: 700px;
             background: var(--panel-bg);
             border-left: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             padding: 16px;
             overflow-y: auto;
-            transition: width 0.2s, min-width 0.2s, padding 0.2s;
+            transition: width 0.2s, opacity 0.2s;
+            box-sizing: border-box;
+            flex-shrink: 0;
         }
         .preview-pane.collapsed {
-            width: 0;
-            min-width: 0;
-            padding: 0;
-            border-left: none;
-            overflow: hidden;
+            width: 0 !important;
+            min-width: 0 !important;
+            padding: 0 !important;
+            border-left: none !important;
+            overflow: hidden !important;
         }
         .preview-pane h2 {
             font-size: 14px;
@@ -1312,17 +1483,386 @@ public static class FileManagerWebApp
 
         /* Quick Look Modal (Spacebar) */
         .quick-look-box {
-            width: 580px;
-            max-width: 90vw;
-            max-height: 80vh;
+            width: 860px;
+            max-width: 95vw;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
         }
         .quick-look-body {
-            max-height: 60vh;
+            max-height: 72vh;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            width: 100%;
+            box-sizing: border-box;
+            padding: 4px 0;
+        }
+
+        /* ══════════════════════════════════════════════════════════ */
+        /* 📊 RICH PREVIEWS: SPREADSHEETS, DOCS, MEDIA, CODE        */
+        /* ══════════════════════════════════════════════════════════ */
+        .preview-badge-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+            flex-wrap: wrap;
+        }
+        .preview-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(108, 92, 231, 0.12);
+            border: 1px solid rgba(108, 92, 231, 0.25);
+            color: #a29bfe;
+            font-weight: 500;
+        }
+        .preview-meta-pill {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        .preview-table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+            max-height: 480px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: #141418;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
+            margin-top: 6px;
+        }
+        .preview-data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+            text-align: left;
+            white-space: nowrap;
+        }
+        .preview-data-table th, .preview-data-table td {
+            padding: 7px 12px;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .preview-data-table th {
+            position: sticky;
+            top: 0;
+            background: #1d1d26;
+            color: #a29bfe;
+            font-weight: 600;
+            z-index: 2;
+            border-bottom: 2px solid rgba(108, 92, 231, 0.4);
+            user-select: none;
+        }
+        .preview-data-table th.idx-col, .preview-data-table td.idx-col {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            background: #171720;
+            color: var(--text-muted);
+            width: 42px;
+            min-width: 42px;
+            text-align: center;
+            font-size: 10px;
+            border-right: 2px solid rgba(255, 255, 255, 0.08);
+        }
+        .preview-data-table th.idx-col {
+            z-index: 4;
+            background: #21212c;
+        }
+        .preview-data-table tbody tr:nth-child(even) td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .preview-data-table tbody tr:hover td {
+            background: rgba(108, 92, 231, 0.12);
+            color: #fff;
+        }
+        .sheet-tabs-container {
+            display: flex;
+            gap: 5px;
+            overflow-x: auto;
+            padding-bottom: 6px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .sheet-tab-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s ease;
+        }
+        .sheet-tab-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+        }
+        .sheet-tab-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(108, 92, 231, 0.35);
+        }
+        .doc-paper-view {
+            background: #ffffff;
+            color: #2d3436;
+            padding: 24px 30px;
+            border-radius: 8px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Georgia, serif;
+            font-size: 13px;
+            line-height: 1.7;
+            max-height: 520px;
             overflow-y: auto;
+            margin-top: 6px;
+            word-break: break-word;
+        }
+        .doc-paper-view h1, .doc-paper-view h2, .doc-paper-view h3, .doc-paper-view h4 {
+            color: #1e272e;
+            margin-top: 14px;
+            margin-bottom: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .doc-paper-view h1 { font-size: 20px; border-bottom: 1px solid #dfe6e9; padding-bottom: 6px; }
+        .doc-paper-view h2 { font-size: 17px; }
+        .doc-paper-view h3 { font-size: 15px; }
+        .doc-paper-view p { margin-bottom: 10px; }
+        .doc-paper-view table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+        .doc-paper-view th, .doc-paper-view td { border: 1px solid #b2bec3; padding: 6px 10px; font-size: 12px; }
+        .doc-paper-view th { background: #f1f2f6; font-weight: 600; }
+        .doc-paper-view ul, .doc-paper-view ol { padding-left: 20px; margin-bottom: 10px; }
+        .md-rendered-view {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-color);
+            padding: 16px 20px;
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.65;
+            color: var(--text-main);
+            max-height: 480px;
+            overflow-y: auto;
+            word-break: break-word;
+            margin-top: 6px;
+        }
+        .md-rendered-view h1, .md-rendered-view h2, .md-rendered-view h3 {
+            color: #fff;
+            margin-top: 14px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        .md-rendered-view h1 { font-size: 17px; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; }
+        .md-rendered-view h2 { font-size: 15px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 4px; }
+        .md-rendered-view h3 { font-size: 13px; color: #a29bfe; }
+        .md-rendered-view code {
+            background: rgba(108, 92, 231, 0.15);
+            color: #d1c8fe;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+        }
+        .md-rendered-view pre {
+            background: #0f0f13;
+            border: 1px solid var(--border-color);
+            padding: 10px 14px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .md-rendered-view pre code {
+            background: transparent;
+            padding: 0;
+            color: #00cec9;
+        }
+        .md-rendered-view blockquote {
+            border-left: 3px solid #6c5ce7;
+            padding-left: 12px;
+            margin: 8px 0;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+        .md-rendered-view ul, .md-rendered-view ol {
+            padding-left: 20px;
+            margin: 8px 0;
+        }
+        .md-rendered-view li {
+            margin-bottom: 4px;
+        }
+        .media-preview-box {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            padding: 24px 16px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-top: 6px;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .media-icon-badge {
+            font-size: 48px;
+            margin-bottom: 12px;
+            filter: drop-shadow(0 4px 12px rgba(108, 92, 231, 0.4));
+        }
+        .media-preview-box audio {
+            width: 90%;
+            max-width: 440px;
+            margin-top: 14px;
+            outline: none;
+        }
+        .media-preview-box video {
+            width: 100%;
+            max-height: 440px;
+            border-radius: 6px;
+            background: #000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            outline: none;
+        }
+        .pdf-preview-frame {
+            width: 100%;
+            height: 480px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: #2b2b2b;
+            margin-top: 6px;
+        }
+
+        /* ══════════════════════════════════════════════════════════ */
+        /* ❓ HELP & FEATURE GUIDE MODAL STYLES                      */
+        /* ══════════════════════════════════════════════════════════ */
+        .help-tabs-nav {
+            display: flex;
+            gap: 6px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            overflow-x: auto;
+            flex-shrink: 0;
+        }
+        .help-tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .help-tab-btn:hover {
+            background: var(--hover-bg);
+            color: var(--text-main);
+        }
+        .help-tab-btn.active {
+            background: var(--accent);
+            color: #fff;
+            font-weight: 600;
+        }
+        .help-content-container {
+            overflow-y: auto;
+            max-height: 58vh;
+            padding-right: 6px;
+            display: flex;
+            flex-direction: column;
+        }
+        .help-pane {
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .help-pane.active {
+            display: flex;
+        }
+        .help-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .help-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            vertical-align: middle;
+        }
+        .help-table tr:hover td {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .help-table td:first-child {
+            width: 40%;
+            white-space: nowrap;
+        }
+        .help-card {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .help-card-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .help-card-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        kbd {
+            background: #23232c;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+            color: #ffffff;
+            display: inline-block;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            font-size: 11px;
+            padding: 2px 6px;
+            white-space: nowrap;
+            letter-spacing: 0.3px;
+        }
+        .status-help-hint {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-muted);
+            font-size: 11px;
+            padding: 2px 9px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .status-help-hint:hover {
+            border-color: var(--accent);
+            color: #fff;
+            background: rgba(108, 92, 231, 0.2);
+            transform: scale(1.02);
         }
 
         /* Toast Notifications */
@@ -1350,6 +1890,9 @@ public static class FileManagerWebApp
         /* Bottom Status Bar */
         .status-bar {
             height: 26px;
+            min-height: 26px;
+            max-height: 26px;
+            flex-shrink: 0;
             background: #0e0e11;
             border-top: 1px solid var(--border-color);
             padding: 0 16px;
@@ -1358,6 +1901,7 @@ public static class FileManagerWebApp
             justify-content: space-between;
             font-size: 11px;
             color: var(--text-muted);
+            box-sizing: border-box;
         }
 
         /* Git Status Indicator & Badges */
@@ -1504,11 +2048,535 @@ public static class FileManagerWebApp
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+    
+        /* ══════════════════════════════════════════════════════════ */
+        /* ❮ ❯ SIDEBAR CHEVRONS & EDGE EXPAND BUTTON                  */
+        /* ══════════════════════════════════════════════════════════ */
+        .sidebar-collapse-chevron {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text-muted);
+            border-radius: 4px;
+            padding: 2px 7px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .sidebar-collapse-chevron:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+        .sidebar-edge-toggle {
+            position: absolute;
+            left: 0;
+            top: 14px;
+            z-index: 90;
+            width: 18px;
+            height: 38px;
+            background: #1c1c24;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+            color: #a29bfe;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: bold;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+            transition: width 0.15s, background 0.15s, color 0.15s;
+        }
+        .sidebar-edge-toggle:hover {
+            width: 22px;
+            background: var(--accent);
+            color: #ffffff;
+        }
+
+        /* ══════════════════════════════════════════════════════════ */
+        /* 🤖 AGENT MACHINE-LEVEL SEARCH STYLES                       */
+        /* ══════════════════════════════════════════════════════════ */
+        .toolbar-search-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 2px 6px;
+            width: 340px;
+            min-width: 340px;
+            max-width: 340px;
+            height: 30px;
+            min-height: 30px;
+            max-height: 30px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .toolbar-search-group:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent);
+        }
+        .search-scope-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            width: 86px;
+            min-width: 86px;
+            max-width: 86px;
+            box-sizing: border-box;
+            background: rgba(255, 255, 255, 0.07);
+            color: var(--text-main);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 4px 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            white-space: nowrap;
+        }
+        .search-scope-pill:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+        .search-scope-pill.machine-mode {
+            background: linear-gradient(135deg, rgba(108, 92, 231, 0.35) 0%, rgba(0, 206, 201, 0.35) 100%);
+            color: #00cec9;
+            border-color: #00cec9;
+            box-shadow: 0 0 8px rgba(0, 206, 201, 0.35);
+        }
+        .scope-arrow {
+            font-size: 9px;
+            opacity: 0.7;
+        }
+        .search-input-box {
+            display: flex;
+            align-items: center;
+            position: relative;
+            flex: 1;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        .search-input-box .search-input {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 5px 20px 5px 4px !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            color: var(--text-main);
+            font-size: 12px;
+            outline: none !important;
+            transition: none !important;
+        }
+        .search-input-box .search-input:focus {
+            width: 100% !important;
+        }
+        .search-input.machine-focus {
+            color: #00cec9 !important;
+        }
+        .search-clear-btn {
+            position: absolute;
+            right: 2px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 11px;
+            padding: 2px 4px;
+        }
+        .search-clear-btn:hover {
+            color: var(--text-main);
+        }
+        .agent-search-action {
+            width: 26px;
+            min-width: 26px;
+            max-width: 26px;
+            height: 26px;
+            padding: 0;
+            font-size: 12px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            transition: all 0.2s;
+        }
+        .agent-search-action:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--text-main);
+        }
+        .agent-search-action.active-machine-action {
+            background: var(--accent-gradient);
+            color: #ffffff;
+            border: none;
+            box-shadow: 0 0 8px rgba(0, 206, 201, 0.4);
+        }
+        .search-results-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(90deg, rgba(108, 92, 231, 0.22) 0%, rgba(0, 206, 201, 0.15) 100%);
+            border-bottom: 1px solid rgba(108, 92, 231, 0.35);
+            padding: 8px 16px;
+            font-size: 12px;
+            animation: fadeIn 0.2s ease-in-out;
+            margin-bottom: 4px;
+        }
+        .search-banner-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-main);
+        }
+        .search-banner-icon {
+            font-size: 14px;
+            animation: pulse 1.5s infinite;
+        }
+        .search-banner-meta {
+            font-size: 11px;
+            color: #00cec9;
+            background: rgba(0, 206, 201, 0.15);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .search-banner-close {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-main);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .search-banner-close:hover {
+            background: rgba(235, 77, 75, 0.25);
+            border-color: var(--danger);
+            color: #ff7675;
+        }
+        .item-search-location {
+            font-size: 10px;
+            color: #8888aa;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            cursor: pointer;
+        }
+        .item-search-location:hover {
+            color: #00cec9;
+        }
+
+    
+        /* ══════════════════════════════════════════════════════════ */
+        /* 📐 DRAGGABLE RESIZER SPLITTER HANDLES                      */
+        /* ══════════════════════════════════════════════════════════ */
+        .resizer-handle {
+            width: 5px;
+            cursor: col-resize;
+            background: transparent;
+            position: relative;
+            z-index: 30;
+            user-select: none;
+            flex-shrink: 0;
+            transition: background 0.15s ease;
+        }
+        .resizer-handle:hover,
+        .resizer-handle.resizing {
+            background: var(--accent);
+            box-shadow: 0 0 6px var(--accent);
+        }
+        .resizer-handle::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: -4px;
+            right: -4px;
+            z-index: 31;
+        }
+        .resizing-active,
+        .resizing-active * {
+            transition: none !important;
+            user-select: none !important;
+        }
+
+    
+        /* ══════════════════════════════════════════════════════════ */
+        /* ⊞ UNIFIED VIEW SELECTION DROPDOWN & VIEW MODES             */
+        /* ══════════════════════════════════════════════════════════ */
+        .view-dropdown-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .view-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 32px;
+            background: #1c1c24 !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            border-radius: 8px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+            padding: 5px;
+            min-width: 220px;
+            z-index: 6600 !important;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            animation: fadeIn 0.15s ease-out;
+        }
+        .view-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            color: var(--text-main);
+        }
+        .view-menu-item:hover {
+            background: rgba(108, 92, 231, 0.25);
+            color: #ffffff;
+        }
+        .view-menu-item.active {
+            background: rgba(108, 92, 231, 0.35);
+            color: #a29bfe;
+            font-weight: 600;
+        }
+        .view-menu-icon {
+            font-size: 14px;
+            width: 18px;
+            text-align: center;
+        }
+        .view-menu-text {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        .view-menu-title {
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        .view-menu-desc {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 1px;
+        }
+        .view-menu-check {
+            font-size: 12px;
+            font-weight: bold;
+            opacity: 0;
+            color: #00cec9;
+        }
+        .view-menu-item.active .view-menu-check {
+            opacity: 1;
+        }
+
+        /* 1. DETAILS VIEW (Multi-column sortable table) */
+        #files.details-view {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        #files.details-view .item {
+            display: grid;
+            grid-template-columns: 28px 1fr 140px 100px 90px;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+            border: 1px solid transparent;
+            font-size: 12px;
+        }
+        #files.details-view .item:hover { background: var(--hover-bg); }
+        #files.details-view .item.selected {
+            background: var(--active-bg);
+            border-color: var(--active-border);
+        }
+        #files.details-view .item i { font-style: normal; font-size: 16px; }
+        #files.details-view .item-thumb {
+            width: 18px;
+            height: 18px;
+            object-fit: cover;
+            border-radius: 2px;
+        }
+        #files.details-view .item-badge { display: none; }
+        #files.details-view .item-name { font-weight: 500; }
+
+        /* 2. SIMPLE LIST VIEW (Compact rows) */
+        #files.list-view {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        #files.list-view .item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+            border: 1px solid transparent;
+            font-size: 12px;
+        }
+        #files.list-view .item:hover { background: var(--hover-bg); }
+        #files.list-view .item.selected {
+            background: var(--active-bg);
+            border-color: var(--active-border);
+        }
+        #files.list-view .item i { font-style: normal; font-size: 16px; }
+        #files.list-view .item-thumb {
+            width: 18px;
+            height: 18px;
+            object-fit: cover;
+            border-radius: 2px;
+        }
+        #files.list-view .item-badge { display: none; }
+        #files.list-view .item-name { font-weight: 500; flex: 1; min-width: 0; }
+        #files.list-view .item-size { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+        #files.list-view .item-modified,
+        #files.list-view .item-type { display: none; }
+
+        /* 4. LARGE ICONS VIEW */
+        #files.large-view {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+            gap: 16px;
+            padding: 6px;
+        }
+        #files.large-view .item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 16px 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+        }
+        #files.large-view .item:hover {
+            background: var(--hover-bg);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        }
+        #files.large-view .item.selected {
+            background: var(--active-bg);
+            border-color: var(--active-border);
+        }
+        #files.large-view .item-icon-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 76px;
+            height: 76px;
+            margin-bottom: 10px;
+        }
+        #files.large-view .item i { font-style: normal; font-size: 54px; }
+        #files.large-view .item-thumb {
+            width: 72px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        #files.large-view .item-badge {
+            position: absolute;
+            bottom: -2px;
+            right: -6px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #2d3436;
+            color: #dfe6e9;
+        }
+        #files.large-view .item-name {
+            word-break: break-all;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        #files.large-view .item-size,
+        #files.large-view .item-modified,
+        #files.large-view .item-type { display: none; }
+
+        /* 5. SMALL ICONS / COMPACT VIEW */
+        #files.compact-view {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+        #files.compact-view .item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.1s ease;
+            font-size: 11px;
+            height: 24px;
+        }
+        #files.compact-view .item:hover { background: var(--hover-bg); }
+        #files.compact-view .item.selected {
+            background: var(--active-bg);
+            border-color: var(--active-border);
+        }
+        #files.compact-view .item i { font-style: normal; font-size: 14px; }
+        #files.compact-view .item-thumb { width: 14px; height: 14px; border-radius: 2px; }
+        #files.compact-view .item-badge { display: none; }
+        #files.compact-view .item-name { font-weight: 500; flex: 1; min-width: 0; }
+        #files.compact-view .item-size { font-size: 10px; color: var(--text-muted); margin-left: auto; }
+        #files.compact-view .item-modified,
+        #files.compact-view .item-type { display: none; }
+
     </style>
 </head>
 <body>
     <!-- Click-Catching Dim Backdrop for Folder Dropdown -->
     <div id="path-dropdown-backdrop" class="dropdown-backdrop" onclick="closePathDropdown(event)" style="display: none;"></div>
+
+    <!-- Multi-Tab Strip (Browser / Windows 11 Explorer Style) -->
+    <div id="tabs-bar" class="tabs-bar">
+        <div id="tabs-container" class="tabs-container"></div>
+        <button id="btn-new-tab" class="btn-new-tab" onclick="addNewTab()" title="New Tab (Ctrl+T / Cmd+T)">
+            <span>+</span>
+        </button>
+    </div>
 
     <!-- Top Address & Navigation Bar (Windows / Mac Style) -->
     <header>
@@ -1526,11 +2594,57 @@ public static class FileManagerWebApp
             </div>
             <div id="path-dropdown" class="path-dropdown" onclick="event.stopPropagation()" style="display: none;"></div>
         </div>
-        <div class="nav-buttons view-toggles">
-            <button id="btn-list" onclick="setView('list')" title="List View">☰</button>
-            <button id="btn-grid" onclick="setView('grid')" class="active" title="Grid View">⊞</button>
+        <div class="nav-buttons view-toggles" style="position: relative;">
+            <button id="btn-view-dropdown" class="tool-btn view-dropdown-btn" onclick="toggleViewMenu(event)" title="Change layout view">
+                <span id="current-view-icon">⊞</span> <span id="current-view-label">Grid</span> <span style="font-size: 8px; opacity: 0.7; margin-left: 2px;">▾</span>
+            </button>
             <button id="btn-preview" onclick="togglePreview()" class="active" title="Toggle Preview Pane">👁</button>
             <button id="btn-settings-gear" onclick="openSettingsModal()" class="tool-btn" title="VenEl Settings & Engine Status" style="font-size: 13px; padding: 5px 8px;">⚙️</button>
+            <button id="btn-help-guide" onclick="openHelpModal('shortcuts')" class="tool-btn" title="Feature Guide & Keyboard Shortcuts (Press ?)" style="font-size: 13px; padding: 5px 8px;">❓</button>
+
+            <!-- Unified View Dropdown Menu -->
+            <div id="view-dropdown-menu" class="view-dropdown-menu" onclick="event.stopPropagation()" style="display: none;">
+                <div class="view-menu-item" id="opt-details" onclick="setView('details')">
+                    <span class="view-menu-icon">📑</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">Details</span>
+                        <span class="view-menu-desc">Multi-column sortable table</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+                <div class="view-menu-item" id="opt-list" onclick="setView('list')">
+                    <span class="view-menu-icon">☰</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">List</span>
+                        <span class="view-menu-desc">Clean compact list</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+                <div class="view-menu-item active" id="opt-grid" onclick="setView('grid')">
+                    <span class="view-menu-icon">⊞</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">Grid / Medium Icons</span>
+                        <span class="view-menu-desc">Standard card tiles</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+                <div class="view-menu-item" id="opt-large" onclick="setView('large')">
+                    <span class="view-menu-icon">🖼️</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">Large Icons</span>
+                        <span class="view-menu-desc">High-res previews & thumbnails</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+                <div class="view-menu-item" id="opt-compact" onclick="setView('compact')">
+                    <span class="view-menu-icon">🗂️</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">Small Icons / Compact</span>
+                        <span class="view-menu-desc">High-density mini rows</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -1548,10 +2662,7 @@ public static class FileManagerWebApp
     <!-- CRUD & Explorer Action Toolbar -->
     <div class="toolbar">
         <div class="toolbar-group">
-            <button class="tool-btn" id="btn-rail-toggle" onclick="toggleSidebarRail()" title="Toggle Favorites Sidebar (Ctrl+B)">
-                <i>◧</i> Sidebar
-            </button>
-            <div class="toolbar-divider"></div>
+
             <button class="tool-btn primary" onclick="showNewFolderModal()">
                 <i>📁</i> New Folder
             </button>
@@ -1587,17 +2698,30 @@ public static class FileManagerWebApp
             </button>
         </div>
 
-        <div class="toolbar-group">
-            <input type="text" id="search" class="search-input" placeholder="🔍 Search folder..." onkeyup="handleSearch()" />
+        <div class="toolbar-group toolbar-search-group">
+            <button class="search-scope-pill" id="search-scope-pill" onclick="toggleSearchScope()" title="Switch search scope: Folder vs ⚡ Machine (Agent)">
+                <span id="scope-icon">📁</span> <span id="scope-label">Folder</span> <span class="scope-arrow">▾</span>
+            </button>
+            <div class="search-input-box">
+                <input type="text" id="search" class="search-input" placeholder="Filter folder... (or switch to ⚡ Machine)" onkeyup="handleSearchInput(event)" onkeydown="handleSearchKey(event)" autocomplete="off" />
+                <button id="search-clear-btn" class="search-clear-btn" onclick="clearSearch()" style="display: none;" title="Clear Search">✕</button>
+            </div>
+            <button id="btn-agent-search-action" class="tool-btn agent-search-action" onclick="handleSearchActionClick()" title="Filter current folder">
+                <i>🔍</i>
+            </button>
         </div>
     </div>
 
     <!-- Main Explorer Area -->
     <div class="main-content">
+        <!-- Left Edge Expand Button (appears when sidebar is collapsed) -->
+        <button id="sidebar-edge-toggle" class="sidebar-edge-toggle" onclick="toggleSidebarRail()" title="Expand Sidebar (>)" style="display: none;">❯</button>
+
         <!-- Collapsible Left Favorites & Drives Sidebar (Windows Quick Access / macOS Favorites) -->
         <aside class="quick-access-sidebar" id="quick-access-sidebar">
-            <div class="sidebar-group-title">
-                <span>Favorites</span>
+            <div class="sidebar-header-row" style="display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 6px;">
+                <span class="sidebar-group-title" style="margin: 0;">Favorites</span>
+                <button class="sidebar-collapse-chevron" onclick="toggleSidebarRail()" title="Collapse Sidebar (<)">❮</button>
             </div>
             <div id="quick-favorites">
                 <div class="quick-item" onclick="goHome()">
@@ -1620,8 +2744,21 @@ public static class FileManagerWebApp
             <div id="quick-drives"></div>
         </aside>
 
+        <!-- Draggable Sidebar Resizer Handle -->
+        <div class="resizer-handle" id="sidebar-resizer" title="Drag to resize sidebar (Double-click to reset)"></div>
+
         <!-- Center Explorer Content -->
         <div class="file-list-container" id="file-list-container" onclick="handleContainerClick(event)" oncontextmenu="handleBackgroundContextMenu(event)">
+            <!-- Agent Search Results Banner -->
+            <div id="search-results-banner" class="search-results-banner" style="display: none;">
+                <div class="search-banner-info">
+                    <span class="search-banner-icon">⚡</span>
+                    <span id="search-banner-text" style="font-weight: 600;">Machine Search Results</span>
+                    <span id="search-banner-meta" class="search-banner-meta">Spotlight Index</span>
+                </div>
+                <button class="search-banner-close" onclick="exitAgentSearch()" title="Exit search and return to folder">✕ Exit Search</button>
+            </div>
+
             <!-- List View Header (Visible only in List Mode) -->
             <div id="list-header" class="list-header" style="display: none;">
                 <div></div>
@@ -1639,6 +2776,9 @@ public static class FileManagerWebApp
                 </div>
             </div>
         </div>
+
+        <!-- Draggable Preview Resizer Handle -->
+        <div class="resizer-handle" id="preview-resizer" title="Drag to resize preview pane (Double-click to reset)"></div>
 
         <!-- Right Split Preview Pane -->
         <div class="preview-pane" id="preview-pane">
@@ -1659,6 +2799,9 @@ public static class FileManagerWebApp
                 <span id="git-branch-name" style="font-weight: 600;">main</span>
                 <span id="git-sync-status" style="font-size: 10px; opacity: 0.85;"></span>
             </div>
+            <button class="status-help-hint" onclick="openHelpModal('shortcuts')" title="View Feature Guide & Keyboard Shortcuts (Press ?)">
+                <span>❓ Guide & Shortcuts (?)</span>
+            </button>
         </div>
         <span style="margin-left: auto; opacity: 0.85; font-size: 11px;">
             VenEl File Manager &bull; <a href="https://www.linkedin.com/in/venkateshellur/" target="_blank" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Venkatesh Ellur</a>
@@ -1669,6 +2812,9 @@ public static class FileManagerWebApp
     <div id="context-menu" class="context-menu">
         <div class="context-item" id="ctx-open" onclick="openSelectedItemInEditor()">
             <i>🚀</i> <span>Open in Editor</span> <span class="shortcut">Enter</span>
+        </div>
+        <div class="context-item" id="ctx-open-new-tab" onclick="openSelectedItemInNewTab()" style="display: none;">
+            <i>🗂️</i> <span>Open in New Tab</span>
         </div>
         <div class="context-item" id="ctx-diff" onclick="diffSelectedItemWithHead()" style="display: none;">
             <i>⚖️</i> <span>Compare with HEAD (Diff)</span>
@@ -1718,6 +2864,32 @@ public static class FileManagerWebApp
         </div>
         <div class="context-item danger" id="ctx-delete" onclick="deleteSelectedItem()">
             <i>🗑️</i> <span>Delete</span> <span class="shortcut">Del</span>
+        </div>
+    </div>
+
+    <!-- Tab Context Menu -->
+    <div id="tab-context-menu" class="context-menu" style="display: none;">
+        <div class="context-item" onclick="duplicateTargetTab()">
+            <i>📑</i> <span>Duplicate Tab</span>
+        </div>
+        <div class="context-item" onclick="openTerminalAtTargetTab()">
+            <i>💻</i> <span>Open in Terminal</span>
+        </div>
+        <div class="context-item" onclick="revealTargetTabInOS()">
+            <i>📂</i> <span id="ctx-tab-reveal-label">Reveal in Finder</span>
+        </div>
+        <div class="context-item" onclick="copyTargetTabPath()">
+            <i>📋</i> <span>Copy Folder Path</span>
+        </div>
+        <div class="context-divider"></div>
+        <div class="context-item" onclick="closeTargetTab()">
+            <i>✕</i> <span>Close Tab</span> <span class="shortcut">Ctrl+W</span>
+        </div>
+        <div class="context-item" onclick="closeOtherTabs()">
+            <i>🚫</i> <span>Close Other Tabs</span>
+        </div>
+        <div class="context-item" onclick="closeTabsToRight()">
+            <i>➡️</i> <span>Close Tabs to the Right</span>
         </div>
     </div>
 
@@ -1848,17 +3020,24 @@ public static class FileManagerWebApp
                     </button>
                 </div>
 
+                <!-- Quick Help Link Button -->
+                <button class="modal-btn" onclick="openHelpModal('shortcuts')" style="background: rgba(108, 92, 231, 0.15); border: 1px solid var(--accent); color: #fff; width: 100%; justify-content: center; padding: 9px; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    <span>❓ Open Feature Guide & Keyboard Shortcuts (Press ?)</span>
+                </button>
+
                 <!-- Features Overview -->
                 <div style="background: rgba(108, 92, 231, 0.08); border: 1px solid rgba(108, 92, 231, 0.2); border-radius: 8px; padding: 12px;">
                     <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #a29bfe; margin-bottom: 6px;">
                         ✨ Active Capabilities
                     </div>
                     <ul style="font-size: 11px; color: var(--text-muted); padding-left: 18px; line-height: 1.6; margin: 0;">
-                        <li>⚡ Instant Editor Launch with Auto-Collapse</li>
-                        <li>🤖 Spotlight & PowerShell Machine Agent Search</li>
+                        <li>🗂️ Multi-Tab Browsing (Ctrl+T / Ctrl+W / Middle-click)</li>
+                        <li>🌿 Git Status Badges & Compare with HEAD Live Diff</li>
+                        <li>⚡ Instant Live Filter (/) & Spotlight Machine Search</li>
+                        <li>⭐ Pinned Favorites & Bookmarks Quick-Access Bar</li>
                         <li>⊞ 5 View Layouts (Details, List, Grid, Large, Compact)</li>
-                        <li>↔️ Draggable Splitters with Persistent Memory</li>
-                        <li>👁️ Live Code & Image Previews</li>
+                        <li>👁️ Spacebar Quick Look & Live Code/Image Previews</li>
+                        <li>💻 Integrated Terminal & Native Finder/Explorer Reveal</li>
                     </ul>
                 </div>
 
@@ -1875,6 +3054,160 @@ public static class FileManagerWebApp
 
             <div class="modal-actions" style="margin-top: 14px;">
                 <button class="modal-btn cancel" onclick="hideModals()" style="margin-left: auto;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help & Feature Guide Modal -->
+    <div class="modal-overlay" id="modal-help" onclick="hideModals()">
+        <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 680px; width: 94%; max-height: 88vh; display: flex; flex-direction: column;">
+            <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">❓</span>
+                    <div>
+                        <div style="font-size: 15px; font-weight: 700; color: #fff;">VenEl File Manager — Feature Guide & Shortcuts</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Power tools, keyboard shortcuts, mouse gestures & workflows</div>
+                    </div>
+                </div>
+                <button onclick="hideModals()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 4px;">✕</button>
+            </div>
+
+            <!-- Category Tabs Navigation -->
+            <div class="help-tabs-nav">
+                <button class="help-tab-btn active" id="help-btn-shortcuts" onclick="switchHelpTab('shortcuts')">⌨️ Shortcuts</button>
+                <button class="help-tab-btn" id="help-btn-tabs" onclick="switchHelpTab('tabs')">🗂️ Tabs</button>
+                <button class="help-tab-btn" id="help-btn-git" onclick="switchHelpTab('git')">🌿 Git & Diff</button>
+                <button class="help-tab-btn" id="help-btn-search" onclick="switchHelpTab('search')">⚡ Search & Filter</button>
+                <button class="help-tab-btn" id="help-btn-power" onclick="switchHelpTab('power')">🚀 Power Tools</button>
+            </div>
+
+            <!-- Tab Content Panes -->
+            <div class="help-content-container">
+                <!-- 1. Shortcuts Pane -->
+                <div class="help-pane active" id="help-pane-shortcuts">
+                    <table class="help-table">
+                        <tbody>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>T</kbd></td><td>Open a <strong>New Tab</strong> in current folder</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>W</kbd></td><td>Close active tab</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>Tab</kbd></td><td>Cycle forward / backward between open tabs</td></tr>
+                            <tr><td><kbd>Alt</kbd> + <kbd>1</kbd> .. <kbd>9</kbd></td><td>Jump directly to Tab 1 through 9</td></tr>
+                            <tr><td><kbd>/</kbd></td><td>Focus <strong>Instant Live Filter</strong> for current folder</td></tr>
+                            <tr><td><kbd>Spacebar</kbd></td><td>Toggle <strong>Quick Look</strong> popup preview (Finder style)</td></tr>
+                            <tr><td><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd></td><td>Navigate History Back / Forward</td></tr>
+                            <tr><td><kbd>Alt</kbd> + <kbd>↑</kbd></td><td>Navigate up one level to Parent Folder</td></tr>
+                            <tr><td><kbd>Enter</kbd></td><td>Open selected folder, or open file in VS Code editor</td></tr>
+                            <tr><td><kbd>F2</kbd></td><td>Rename selected item</td></tr>
+                            <tr><td><kbd>Delete</kbd></td><td>Delete selected item</td></tr>
+                            <tr><td><kbd>Alt</kbd> + <kbd>Enter</kbd></td><td>View detailed File/Folder Properties dialog</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd></td><td>Copy selected file/folder</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>X</kbd></td><td>Cut selected file/folder</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>V</kbd></td><td>Paste file/folder from clipboard</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>B</kbd></td><td>Toggle Primary VS Code Sidebar</td></tr>
+                            <tr><td><kbd>Esc</kbd></td><td>Close active modal, context menu, or Quick Look</td></tr>
+                            <tr><td><kbd>?</kbd> or <kbd>F1</kbd></td><td>Open this Feature Guide & Shortcuts Sheet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 2. Tabs Pane -->
+                <div class="help-pane" id="help-pane-tabs">
+                    <div class="help-card">
+                        <div class="help-card-title">🗂️ Browser-Style Multi-Tab Browsing</div>
+                        <div class="help-card-desc">Work with multiple project folders or drives side-by-side without opening extra editor windows. Each tab preserves its own independent path, history stack, and search query.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">🖱️ Middle-Click Power Shortcuts</div>
+                        <div class="help-card-desc">
+                            &bull; <strong>On Folders:</strong> Scroll-wheel click on any folder card or row to open it immediately in a <strong>New Tab</strong> without losing your place.<br>
+                            &bull; <strong>On Tabs:</strong> Scroll-wheel click directly on any tab in the top strip to close it.
+                        </div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">📑 Tab Context Menu</div>
+                        <div class="help-card-desc">Right-click any tab in the top strip for power actions: <strong>Duplicate Tab</strong>, <strong>Open in Terminal</strong>, <strong>Reveal in Finder/Explorer</strong>, <strong>Copy Folder Path</strong>, <strong>Close Other Tabs</strong>, or <strong>Close Tabs to Right</strong>.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">💾 Persistent Tab Sessions</div>
+                        <div class="help-card-desc">Your open tabs and active selection are saved to local session storage. Reopening the File Manager or restarting VS Code automatically restores your exact open tabs!</div>
+                    </div>
+                </div>
+
+                <!-- 3. Git & Diff Pane -->
+                <div class="help-pane" id="help-pane-git">
+                    <div class="help-card">
+                        <div class="help-card-title">🌿 Real-Time Git Status Badges</div>
+                        <div class="help-card-desc">
+                            Files in your Git repositories display visual indicators in real-time:<br>
+                            &bull; <span style="background: rgba(46, 204, 113, 0.2); color: #2ecc71; padding: 2px 6px; border-radius: 4px; font-weight: 600;">U</span> <strong>Untracked:</strong> Brand new file not yet added to Git.<br>
+                            &bull; <span style="background: rgba(241, 196, 15, 0.2); color: #f1c40f; padding: 2px 6px; border-radius: 4px; font-weight: 600;">M</span> <strong>Modified:</strong> Uncommitted working tree modifications.<br>
+                            &bull; <span style="background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 2px 6px; border-radius: 4px; font-weight: 600;">A</span> <strong>Added / Staged:</strong> Changes staged in the Git index.<br>
+                            &bull; <span style="background: rgba(235, 77, 75, 0.2); color: #eb4d4b; padding: 2px 6px; border-radius: 4px; font-weight: 600;">D</span> <strong>Deleted:</strong> File removed from the working tree.
+                        </div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">⚖️ Live Side-by-Side Diff with HEAD</div>
+                        <div class="help-card-desc">Right-click any modified or staged file and click <strong>Compare with HEAD (Diff)</strong> to open VS Code's native visual diff editor side-by-side.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title"> Branch & Commit Sync Status</div>
+                        <div class="help-card-desc">The bottom status bar shows your active branch name and sync status (e.g. <code>main ↑1 ↓0</code>). Click on it anytime to refresh Git status on demand.</div>
+                    </div>
+                </div>
+
+                <!-- 4. Search & Filter Pane -->
+                <div class="help-pane" id="help-pane-search">
+                    <div class="help-card">
+                        <div class="help-card-title">⚡ Instant Live Filter (<kbd>/</kbd>)</div>
+                        <div class="help-card-desc">Press <kbd>/</kbd> anywhere to focus the search bar. As you type, the file view filters in real-time with zero lag. Press <kbd>Esc</kbd> to clear the filter.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">🤖 Machine Agent Search (Spotlight & PowerShell)</div>
+                        <div class="help-card-desc">Click the scope button (<code>📁 Folder</code> &rarr; <code>⚡ Machine</code>) in the toolbar. This unleashes deep operating system indexing (macOS Spotlight / Windows PowerShell) to query your entire hard drive in milliseconds! Click any result's directory chip to jump straight there.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">🍞 Interactive Breadcrumbs & Direct Path Input</div>
+                        <div class="help-card-desc">Click any folder crumb in the address bar to jump up to that folder. Click on the address bar background to type or paste any absolute path, or click <code>▾</code> to quickly switch between Root drives and User Home.</div>
+                    </div>
+                </div>
+
+                <!-- 5. Power Tools Pane -->
+                <div class="help-pane" id="help-pane-power">
+                    <div class="help-card">
+                        <div class="help-card-title">⭐ Bookmarks & Pinned Favorites</div>
+                        <div class="help-card-desc">Click <strong>☆ Pin Folder</strong> in the Bookmarks bar or right-click any folder to pin it. Pinned folders appear as 1-click quick-access chips across all sessions.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">👁️ Spacebar Quick Look & Rich Interactive Previews</div>
+                        <div class="help-card-desc">
+                            Select any file and press <kbd>Spacebar</kbd> for an instant full-screen Quick Look preview, or glance at the right-hand preview pane. Supports:<br>
+                            &bull; <strong>📊 Spreadsheets (CSV, TSV):</strong> Fast native table parser with sticky headers, row numbers, and column counts.<br>
+                            &bull; <strong>📗 Excel Workbooks (.xlsx, .xls):</strong> Multi-sheet navigation with interactive sheet tabs and cell grid views.<br>
+                            &bull; <strong>📘 Word Documents (.docx):</strong> Formatted document reader view with styled headings and tables.<br>
+                            &bull; <strong>📕 PDF Documents (.pdf):</strong> Native inline PDF reader with page navigation.<br>
+                            &bull; <strong>🎵 Audio & Video (.mp3, .wav, .mp4, .webm):</strong> Built-in HTML5 media players.<br>
+                            &bull; <strong>📝 Markdown (.md):</strong> 1-click toggle between Rendered HTML view and Raw Source.<br>
+                            &bull; <strong>💻 Source Code:</strong> Syntax preview with line counts, file size, and 1-click clipboard copy.
+                        </div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">⊞ 5 View Layout Modes</div>
+                        <div class="help-card-desc">Use the Layout menu to toggle between <strong>Details</strong> (sortable multi-column table), <strong>List</strong> (clean compact rows), <strong>Grid</strong> (standard card tiles), <strong>Large Icons</strong> (high-res previews), and <strong>Compact</strong>.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">💻 Integrated Terminal & Native OS Reveal</div>
+                        <div class="help-card-desc">Click <strong>Terminal</strong> in the toolbar or context menu to spawn a VS Code terminal pre-navigated to that folder. Click <strong>Reveal in Finder / Explorer</strong> to open your operating system's native file window.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">⚙️ Engine Diagnostics & Direct-to-Editor Mode</div>
+                        <div class="help-card-desc">Click <strong>⚙️</strong> in the header to view engine diagnostics, endpoint status, and quick VS Code configuration controls.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="modal-actions" style="margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 10px; display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 11px; color: var(--text-muted);">💡 Tip: Press <kbd style="font-size: 10px; padding: 1px 4px;">?</kbd> anywhere to toggle this guide</span>
+                <button class="modal-btn confirm" onclick="hideModals()" style="padding: 7px 18px; font-weight: 600;">Close</button>
             </div>
         </div>
     </div>
@@ -1896,6 +3229,355 @@ public static class FileManagerWebApp
         let currentSort = { field: 'name', asc: true };
 
         // ══════════════════════════════════════════════════════════
+        // 🗂️ MULTI-TAB BROWSING STATE & MANAGEMENT
+        // ══════════════════════════════════════════════════════════
+        let tabs = [];
+        let activeTabId = null;
+        let contextMenuTabId = null;
+
+        function getTabTitleForPath(p) {
+            if (!p || p === '.') return 'Folder';
+            const clean = p.replace(/[\\/]+$/, '');
+            if (!clean) return p || 'Root';
+            const sep = clean.includes('\\') ? '\\' : '/';
+            const parts = clean.split(sep).filter(Boolean);
+            return parts.length > 0 ? parts[parts.length - 1] : clean;
+        }
+
+        function renderTabs() {
+            const container = document.getElementById('tabs-container');
+            if (!container) return;
+
+            let html = '';
+            for (let i = 0; i < tabs.length; i++) {
+                const tab = tabs[i];
+                const isActive = (tab.id === activeTabId);
+                const title = tab.title || getTabTitleForPath(tab.path);
+                const fullPath = tab.path || '';
+                
+                let icon = '📁';
+                if (fullPath === '/' || /^[a-zA-Z]:\\?$/.test(fullPath)) icon = isWindows ? '💻' : '📁';
+                else if (systemRoots.some(function(r) { return r.type === 'Home' && r.path === fullPath; })) icon = '🏠';
+
+                html += '<div class="tab-item' + (isActive ? ' active' : '') + '" ' +
+                        'data-tab-id="' + tab.id + '" ' +
+                        'onclick="switchToTab(\'' + tab.id + '\')" ' +
+                        'onauxclick="handleTabAuxClick(event, \'' + tab.id + '\')" ' +
+                        'oncontextmenu="handleTabContextMenu(event, \'' + tab.id + '\')" ' +
+                        'title="' + escapeHtml(fullPath) + (i < 9 ? ' (Alt+' + (i + 1) + ')' : '') + '">' +
+                        '<span class="tab-icon">' + icon + '</span>' +
+                        '<span class="tab-title">' + escapeHtml(title) + '</span>' +
+                        (tabs.length > 1 ? '<span class="tab-close" onclick="closeTab(\'' + tab.id + '\', event)" title="Close tab (Ctrl+W)">✕</span>' : '') +
+                        '</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        function switchToTab(tabId) {
+            if (activeTabId === tabId) return;
+
+            // 1. Save current active tab state
+            const currentTab = tabs.find(function(t) { return t.id === activeTabId; });
+            if (currentTab) {
+                currentTab.history = [...navHistory];
+                currentTab.historyIndex = navHistoryIndex;
+                currentTab.searchQuery = document.getElementById('search') ? document.getElementById('search').value : '';
+                currentTab.sort = { ...currentSort };
+            }
+
+            // 2. Set new active tab
+            activeTabId = tabId;
+            const nextTab = tabs.find(function(t) { return t.id === tabId; });
+            if (!nextTab) return;
+
+            // 3. Restore target tab state
+            navHistory = Array.isArray(nextTab.history) && nextTab.history.length > 0 ? [...nextTab.history] : [nextTab.path];
+            navHistoryIndex = typeof nextTab.historyIndex === 'number' ? nextTab.historyIndex : navHistory.length - 1;
+            updateNavButtons();
+
+            if (nextTab.sort) {
+                currentSort = { ...nextTab.sort };
+            }
+
+            const searchInput = document.getElementById('search');
+            if (searchInput) {
+                searchInput.value = nextTab.searchQuery || '';
+                const clearBtn = document.getElementById('search-clear-btn');
+                if (clearBtn) clearBtn.style.display = searchInput.value ? 'block' : 'none';
+            }
+
+            renderTabs();
+            saveTabsState();
+
+            // 4. Load directory for this tab
+            loadFiles(nextTab.path);
+        }
+
+        function addNewTab(initialPath) {
+            const targetPath = initialPath || currentPath || '.';
+            const newId = 'tab_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+            const newTab = {
+                id: newId,
+                title: getTabTitleForPath(targetPath),
+                path: targetPath,
+                history: [targetPath],
+                historyIndex: 0,
+                sort: { field: 'name', asc: true },
+                searchQuery: ''
+            };
+            tabs.push(newTab);
+            renderTabs();
+            switchToTab(newId);
+
+            const container = document.getElementById('tabs-container');
+            if (container) {
+                setTimeout(function() { container.scrollLeft = container.scrollWidth; }, 40);
+            }
+        }
+
+        function closeTab(tabId, e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            if (tabs.length <= 1) {
+                showToast('Cannot close the only open tab', 'ℹ️');
+                return;
+            }
+            const idx = tabs.findIndex(function(t) { return t.id === tabId; });
+            if (idx === -1) return;
+
+            const wasActive = (activeTabId === tabId);
+            tabs.splice(idx, 1);
+
+            if (wasActive) {
+                const nextIdx = Math.max(0, idx - 1);
+                const nextTab = tabs[nextIdx];
+                activeTabId = nextTab.id;
+                navHistory = Array.isArray(nextTab.history) ? [...nextTab.history] : [nextTab.path];
+                navHistoryIndex = typeof nextTab.historyIndex === 'number' ? nextTab.historyIndex : navHistory.length - 1;
+                updateNavButtons();
+                renderTabs();
+                saveTabsState();
+                loadFiles(nextTab.path);
+            } else {
+                renderTabs();
+                saveTabsState();
+            }
+        }
+
+        function closeCurrentTab() {
+            closeTab(activeTabId);
+        }
+
+        function handleTabAuxClick(e, tabId) {
+            if (e.button === 1) {
+                e.preventDefault();
+                e.stopPropagation();
+                closeTab(tabId);
+            }
+        }
+
+        function handleItemAuxClick(e, name, isDir) {
+            if (e.button === 1 && isDir) {
+                e.preventDefault();
+                e.stopPropagation();
+                const sep = isWindows ? '\\' : '/';
+                const targetPath = (selectedItem && selectedItem.path) ? selectedItem.path : (currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name);
+                addNewTab(targetPath);
+                showToast('Opened folder in new tab', '🗂️');
+            }
+        }
+
+        function handleTabContextMenu(e, tabId) {
+            e.preventDefault();
+            e.stopPropagation();
+            contextMenuTabId = tabId;
+            hideContextMenu();
+
+            const menu = document.getElementById('tab-context-menu');
+            if (!menu) return;
+
+            const tab = tabs.find(function(t) { return t.id === tabId; });
+            const revealLabel = document.getElementById('ctx-tab-reveal-label');
+            if (revealLabel) revealLabel.textContent = isWindows ? 'Reveal in File Explorer' : 'Reveal in Finder';
+
+            menu.style.display = 'flex';
+            const menuWidth = 200;
+            const menuHeight = 250;
+            const maxX = window.innerWidth - menuWidth - 10;
+            const maxY = window.innerHeight - menuHeight - 10;
+            menu.style.left = Math.min(e.clientX, maxX) + 'px';
+            menu.style.top = Math.min(e.clientY, maxY) + 'px';
+        }
+
+        function duplicateTargetTab() {
+            hideContextMenu();
+            const tab = tabs.find(function(t) { return t.id === contextMenuTabId; }) || tabs.find(function(t) { return t.id === activeTabId; });
+            if (tab) {
+                addNewTab(tab.path);
+            }
+        }
+
+        function openTerminalAtTargetTab() {
+            hideContextMenu();
+            const tab = tabs.find(function(t) { return t.id === contextMenuTabId; }) || tabs.find(function(t) { return t.id === activeTabId; });
+            if (!tab) return;
+            if (window.vscode) {
+                window.vscode.postMessage({ command: 'openTerminal', path: tab.path });
+            } else {
+                fetch('/api/actions/terminal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: tab.path })
+                });
+            }
+            showToast('Opening terminal...', '💻');
+        }
+
+        function revealTargetTabInOS() {
+            hideContextMenu();
+            const tab = tabs.find(function(t) { return t.id === contextMenuTabId; }) || tabs.find(function(t) { return t.id === activeTabId; });
+            if (!tab) return;
+            if (window.vscode) {
+                window.vscode.postMessage({ command: 'revealInOS', path: tab.path });
+            } else {
+                fetch('/api/actions/reveal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: tab.path })
+                });
+            }
+        }
+
+        function copyTargetTabPath() {
+            hideContextMenu();
+            const tab = tabs.find(function(t) { return t.id === contextMenuTabId; }) || tabs.find(function(t) { return t.id === activeTabId; });
+            if (tab && navigator.clipboard) {
+                navigator.clipboard.writeText(tab.path);
+                showToast('Path copied to clipboard', '📋');
+            }
+        }
+
+        function closeTargetTab() {
+            hideContextMenu();
+            if (contextMenuTabId) {
+                closeTab(contextMenuTabId);
+            } else {
+                closeCurrentTab();
+            }
+        }
+
+        function closeOtherTabs() {
+            hideContextMenu();
+            const targetId = contextMenuTabId || activeTabId;
+            const targetTab = tabs.find(function(t) { return t.id === targetId; });
+            if (!targetTab) return;
+            tabs = [targetTab];
+            activeTabId = targetTab.id;
+            navHistory = Array.isArray(targetTab.history) ? [...targetTab.history] : [targetTab.path];
+            navHistoryIndex = typeof targetTab.historyIndex === 'number' ? targetTab.historyIndex : navHistory.length - 1;
+            updateNavButtons();
+            renderTabs();
+            saveTabsState();
+            loadFiles(targetTab.path);
+            showToast('Closed other tabs', 'ℹ️');
+        }
+
+        function closeTabsToRight() {
+            hideContextMenu();
+            const targetId = contextMenuTabId || activeTabId;
+            const idx = tabs.findIndex(function(t) { return t.id === targetId; });
+            if (idx === -1 || idx >= tabs.length - 1) return;
+            tabs = tabs.slice(0, idx + 1);
+            if (!tabs.some(function(t) { return t.id === activeTabId; })) {
+                activeTabId = targetId;
+                const targetTab = tabs[idx];
+                navHistory = Array.isArray(targetTab.history) ? [...targetTab.history] : [targetTab.path];
+                navHistoryIndex = typeof targetTab.historyIndex === 'number' ? targetTab.historyIndex : navHistory.length - 1;
+                updateNavButtons();
+                loadFiles(targetTab.path);
+            }
+            renderTabs();
+            saveTabsState();
+            showToast('Closed tabs to the right', 'ℹ️');
+        }
+
+        function cycleTabs(direction = 1) {
+            if (tabs.length <= 1) return;
+            const currentIdx = tabs.findIndex(function(t) { return t.id === activeTabId; });
+            if (currentIdx === -1) return;
+            let nextIdx = (currentIdx + direction) % tabs.length;
+            if (nextIdx < 0) nextIdx = tabs.length - 1;
+            switchToTab(tabs[nextIdx].id);
+        }
+
+        function openSelectedItemInNewTab() {
+            hideContextMenu();
+            if (!selectedItem) return;
+            const sep = isWindows ? '\\' : '/';
+            const targetPath = (selectedItem && selectedItem.path) ? selectedItem.path : (currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name);
+            addNewTab(targetPath);
+            showToast('Opened folder in new tab', '🗂️');
+        }
+
+        function updateActiveTabAfterLoad(path) {
+            const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+            if (activeTab) {
+                activeTab.path = path;
+                activeTab.title = getTabTitleForPath(path);
+                renderTabs();
+                saveTabsState();
+            }
+        }
+
+        function saveTabsState() {
+            try {
+                const saved = tabs.map(function(t) {
+                    return {
+                        id: t.id,
+                        title: t.title,
+                        path: t.path,
+                        sort: t.sort
+                    };
+                });
+                localStorage.setItem('venel_tabs_v1', JSON.stringify({
+                    activeTabId: activeTabId,
+                    tabs: saved
+                }));
+            } catch (e) {
+                console.warn('Failed to save tabs state', e);
+            }
+        }
+
+        function loadTabsState() {
+            try {
+                const raw = localStorage.getItem('venel_tabs_v1');
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    if (Array.isArray(data.tabs) && data.tabs.length > 0) {
+                        tabs = data.tabs.map(function(t) {
+                            return {
+                                id: t.id,
+                                title: t.title || getTabTitleForPath(t.path),
+                                path: t.path,
+                                history: [t.path],
+                                historyIndex: 0,
+                                sort: t.sort || { field: 'name', asc: true },
+                                searchQuery: ''
+                            };
+                        });
+                        activeTabId = tabs.some(function(t) { return t.id === data.activeTabId; }) ? data.activeTabId : tabs[0].id;
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to restore tabs state', e);
+            }
+            return false;
+        }
+
+        // ══════════════════════════════════════════════════════════
         // 🧭 NAVIGATION & HISTORY
         // ══════════════════════════════════════════════════════════
         function navigateTo(targetPath, isHistoryAction = false) {
@@ -1910,6 +3592,11 @@ public static class FileManagerWebApp
                     navHistoryIndex = navHistory.length - 1;
                 }
                 updateNavButtons();
+            }
+            const activeTab = tabs.find(function(t) { return t.id === activeTabId; });
+            if (activeTab) {
+                activeTab.history = [...navHistory];
+                activeTab.historyIndex = navHistoryIndex;
             }
             loadFiles(targetPath);
         }
@@ -2031,15 +3718,130 @@ public static class FileManagerWebApp
             }
         }
 
+        
+        // ══════════════════════════════════════════════════════════
+        // 📐 INTERACTIVE DRAGGABLE RESIZERS (SIDEBAR & PREVIEW PANE)
+        // ══════════════════════════════════════════════════════════
+        function initSplitters() {
+            const mainContent = document.querySelector('.main-content');
+            const sidebar = document.getElementById('quick-access-sidebar');
+            const sidebarResizer = document.getElementById('sidebar-resizer');
+            const preview = document.getElementById('preview-pane');
+            const previewResizer = document.getElementById('preview-resizer');
+
+            if (!mainContent) return;
+
+            // Restore saved custom widths
+            const savedSidebarWidth = localStorage.getItem('venel_sidebar_width');
+            if (savedSidebarWidth && sidebar && !sidebar.classList.contains('collapsed')) {
+                sidebar.style.width = savedSidebarWidth + 'px';
+            }
+            const savedPreviewWidth = localStorage.getItem('venel_preview_width');
+            if (savedPreviewWidth && preview && !preview.classList.contains('collapsed')) {
+                preview.style.width = savedPreviewWidth + 'px';
+            }
+
+            // A. Left Sidebar Splitter Drag
+            if (sidebar && sidebarResizer) {
+                let isDraggingSidebar = false;
+
+                sidebarResizer.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    isDraggingSidebar = true;
+                    sidebarResizer.classList.add('resizing');
+                    mainContent.classList.add('resizing-active');
+                    document.body.style.cursor = 'col-resize';
+                });
+
+                sidebarResizer.addEventListener('dblclick', function() {
+                    sidebar.style.width = '195px';
+                    localStorage.setItem('venel_sidebar_width', '195');
+                    showToast('Sidebar width reset (195px)', '📐');
+                });
+
+                window.addEventListener('mousemove', function(e) {
+                    if (!isDraggingSidebar) return;
+                    const mainRect = mainContent.getBoundingClientRect();
+                    let newWidth = e.clientX - mainRect.left;
+                    if (newWidth < 130) newWidth = 130;
+                    if (newWidth > 480) newWidth = 480;
+                    sidebar.style.width = newWidth + 'px';
+                    localStorage.setItem('venel_sidebar_width', newWidth);
+                });
+
+                window.addEventListener('mouseup', function() {
+                    if (isDraggingSidebar) {
+                        isDraggingSidebar = false;
+                        sidebarResizer.classList.remove('resizing');
+                        mainContent.classList.remove('resizing-active');
+                        document.body.style.cursor = '';
+                    }
+                });
+            }
+
+            // B. Right Preview Pane Splitter Drag
+            if (preview && previewResizer) {
+                let isDraggingPreview = false;
+
+                previewResizer.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    isDraggingPreview = true;
+                    previewResizer.classList.add('resizing');
+                    mainContent.classList.add('resizing-active');
+                    document.body.style.cursor = 'col-resize';
+                });
+
+                previewResizer.addEventListener('dblclick', function() {
+                    preview.style.width = '320px';
+                    localStorage.setItem('venel_preview_width', '320');
+                    showToast('Preview width reset (320px)', '📐');
+                });
+
+                window.addEventListener('mousemove', function(e) {
+                    if (!isDraggingPreview) return;
+                    const mainRect = mainContent.getBoundingClientRect();
+                    let newWidth = mainRect.right - e.clientX;
+                    if (newWidth < 180) newWidth = 180;
+                    if (newWidth > 680) newWidth = 680;
+                    preview.style.width = newWidth + 'px';
+                    localStorage.setItem('venel_preview_width', newWidth);
+                });
+
+                window.addEventListener('mouseup', function() {
+                    if (isDraggingPreview) {
+                        isDraggingPreview = false;
+                        previewResizer.classList.remove('resizing');
+                        mainContent.classList.remove('resizing-active');
+                        document.body.style.cursor = '';
+                    }
+                });
+            }
+        }
+
         // ══════════════════════════════════════════════════════════
         // ◧ QUICK ACCESS SIDEBAR
         // ══════════════════════════════════════════════════════════
         function toggleSidebarRail() {
             const sidebar = document.getElementById('quick-access-sidebar');
+            const resizer = document.getElementById('sidebar-resizer');
             const btn = document.getElementById('btn-rail-toggle');
+            const chevron = document.getElementById('rail-toggle-chevron');
+            const label = document.getElementById('rail-toggle-label');
+            const edgeBtn = document.getElementById('sidebar-edge-toggle');
             if (sidebar) {
-                sidebar.classList.toggle('collapsed');
-                if (btn) btn.classList.toggle('active', !sidebar.classList.contains('collapsed'));
+                const isNowCollapsed = sidebar.classList.toggle('collapsed');
+                if (chevron) chevron.textContent = isNowCollapsed ? '❯' : '❮';
+                if (label) label.textContent = 'Sidebar';
+                if (btn) {
+                    btn.title = isNowCollapsed ? 'Expand Sidebar (>)' : 'Collapse Sidebar (<)';
+                    btn.classList.toggle('active', isNowCollapsed);
+                }
+                if (edgeBtn) {
+                    edgeBtn.style.display = isNowCollapsed ? 'flex' : 'none';
+                }
+                if (resizer) {
+                    resizer.style.display = isNowCollapsed ? 'none' : 'block';
+                }
             }
         }
 
@@ -2056,6 +3858,181 @@ public static class FileManagerWebApp
                         '</div>';
             }
             container.innerHTML = html;
+        }
+
+        
+        // ══════════════════════════════════════════════════════════
+        // 🤖 AGENT MACHINE-LEVEL SEARCH ENGINE
+        // ══════════════════════════════════════════════════════════
+        let searchScope = 'folder'; // 'folder' | 'machine'
+        let isAgentSearchResultsActive = false;
+        let originalFolderItems = [];
+        let agentSearchTimer = null;
+
+        function toggleSearchScope() {
+            searchScope = searchScope === 'folder' ? 'machine' : 'folder';
+            updateSearchScopeUI();
+        }
+
+        function updateSearchScopeUI() {
+            const pill = document.getElementById('search-scope-pill');
+            const icon = document.getElementById('scope-icon');
+            const label = document.getElementById('scope-label');
+            const input = document.getElementById('search');
+            const btnAction = document.getElementById('btn-agent-search-action');
+            const actionIcon = btnAction ? btnAction.querySelector('i') : null;
+
+            if (searchScope === 'machine') {
+                pill.classList.add('machine-mode');
+                icon.textContent = '⚡';
+                label.textContent = 'Machine';
+                input.placeholder = 'Search entire machine (e.g. *.cs)...';
+                input.classList.add('machine-focus');
+                if (btnAction) {
+                    btnAction.title = 'Search Entire Machine (Enter)';
+                    btnAction.classList.add('active-machine-action');
+                }
+                if (actionIcon) actionIcon.textContent = '⚡';
+                showToast('Agent Search: Machine Index active', '⚡');
+            } else {
+                pill.classList.remove('machine-mode');
+                icon.textContent = '📁';
+                label.textContent = 'Folder';
+                input.placeholder = 'Filter current folder...';
+                input.classList.remove('machine-focus');
+                if (btnAction) {
+                    btnAction.title = 'Filter current folder';
+                    btnAction.classList.remove('active-machine-action');
+                }
+                if (actionIcon) actionIcon.textContent = '🔍';
+                if (isAgentSearchResultsActive) exitAgentSearch();
+            }
+            input.focus();
+        }
+
+        function handleSearchActionClick() {
+            if (searchScope === 'machine') {
+                triggerAgentSearch();
+            } else {
+                handleSearch();
+            }
+        }
+
+        function handleSearchInput(e) {
+            const val = document.getElementById('search').value;
+            const clearBtn = document.getElementById('search-clear-btn');
+            if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
+
+            if (searchScope === 'folder') {
+                handleSearch();
+            }
+        }
+
+        function handleSearchKey(e) {
+            if (e.key === 'Enter') {
+                if (searchScope === 'machine') {
+                    triggerAgentSearch();
+                }
+            } else if (e.key === 'Escape') {
+                clearSearch();
+            }
+        }
+
+        function clearSearch() {
+            const input = document.getElementById('search');
+            input.value = '';
+            const clearBtn = document.getElementById('search-clear-btn');
+            if (clearBtn) clearBtn.style.display = 'none';
+
+            if (isAgentSearchResultsActive) {
+                exitAgentSearch();
+            } else {
+                handleSearch();
+            }
+        }
+
+        async function triggerAgentSearch() {
+            const query = document.getElementById('search').value.trim();
+            if (!query) {
+                showToast('Please type a search query', '⚠️');
+                return;
+            }
+
+            const banner = document.getElementById('search-results-banner');
+            const bannerText = document.getElementById('search-banner-text');
+            const bannerMeta = document.getElementById('search-banner-meta');
+            
+            if (banner) {
+                banner.style.display = 'flex';
+                bannerText.innerHTML = '🤖 Agent searching machine for "<strong>' + escapeHtml(query) + '</strong>"...';
+                bannerMeta.innerText = 'Scanning index...';
+            }
+
+            if (!isAgentSearchResultsActive) {
+                originalFolderItems = [...currentItems];
+                isAgentSearchResultsActive = true;
+            }
+
+            try {
+                const res = await fetch('/api/files/agentSearch?query=' + encodeURIComponent(query) + '&scope=machine&currentPath=' + encodeURIComponent(currentPath));
+                if (!res.ok) {
+                    showToast('Agent search failed', '❌');
+                    return;
+                }
+                const data = await res.json();
+                
+                bannerText.innerHTML = '⚡ <strong>' + data.count + '</strong> match' + (data.count === 1 ? '' : 'es') + ' found across machine for "<strong>' + escapeHtml(query) + '</strong>"';
+                bannerMeta.innerText = (data.engine || 'Spotlight Index') + ' • ' + (data.executionTimeMs || 0) + 'ms';
+
+                currentItems = data.items.map(function(item) {
+                    return {
+                        name: item.name,
+                        path: item.path,
+                        directory: item.directory,
+                        type: item.type,
+                        size: item.size,
+                        modified: item.modified,
+                        isSearchResult: true
+                    };
+                });
+
+                applySortAndRender();
+                showToast('Agent Search complete: ' + data.count + ' items found in ' + data.executionTimeMs + 'ms', '⚡');
+            } catch (err) {
+                console.error(err);
+                showToast('Agent Search error', '❌');
+            }
+        }
+
+        function exitAgentSearch() {
+            isAgentSearchResultsActive = false;
+            const banner = document.getElementById('search-results-banner');
+            if (banner) banner.style.display = 'none';
+
+            const input = document.getElementById('search');
+            input.value = '';
+            const clearBtn = document.getElementById('search-clear-btn');
+            if (clearBtn) clearBtn.style.display = 'none';
+
+            currentItems = [...originalFolderItems];
+            applySortAndRender();
+            showToast('Returned to folder', '📁');
+        }
+
+        function jumpToSearchResult(directory, fileName) {
+            exitAgentSearch();
+            loadFiles(directory).then(function() {
+                setTimeout(function() {
+                    const itemEls = document.querySelectorAll('.item');
+                    itemEls.forEach(function(el) {
+                        const nameEl = el.querySelector('.item-name');
+                        if (nameEl && nameEl.innerText === fileName) {
+                            el.classList.add('selected');
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    });
+                }, 300);
+            });
         }
 
         // ══════════════════════════════════════════════════════════
@@ -2152,34 +4129,74 @@ public static class FileManagerWebApp
         // ══════════════════════════════════════════════════════════
         // 🖼️ RENDER ITEMS & VIEWS
         // ══════════════════════════════════════════════════════════
-        function setView(viewType) {
-            const el = document.getElementById('files');
-            const listHeader = document.getElementById('list-header');
-            const btnList = document.getElementById('btn-list');
-            const btnGrid = document.getElementById('btn-grid');
+        let currentViewMode = localStorage.getItem('venel_view_mode') || 'grid';
 
-            if (viewType === 'list') {
-                el.className = 'list-view';
-                if (listHeader) listHeader.style.display = 'grid';
-                btnList.classList.add('active');
-                btnGrid.classList.remove('active');
-            } else {
-                el.className = 'grid-view';
-                if (listHeader) listHeader.style.display = 'none';
-                btnGrid.classList.add('active');
-                btnList.classList.remove('active');
+        function toggleViewMenu(e) {
+            if (e && e.stopPropagation) e.stopPropagation();
+            const menu = document.getElementById('view-dropdown-menu');
+            if (menu) {
+                const isHidden = menu.style.display === 'none' || !menu.style.display;
+                menu.style.display = isHidden ? 'flex' : 'none';
             }
+        }
+
+        function closeViewMenu() {
+            const menu = document.getElementById('view-dropdown-menu');
+            if (menu) menu.style.display = 'none';
+        }
+
+        function setView(mode) {
+            currentViewMode = mode;
+            localStorage.setItem('venel_view_mode', mode);
+            closeViewMenu();
+
+            const filesContainer = document.getElementById('files');
+            const listHeader = document.getElementById('list-header');
+            const iconEl = document.getElementById('current-view-icon');
+            const labelEl = document.getElementById('current-view-label');
+
+            if (!filesContainer) return;
+
+            // Reset view class names
+            filesContainer.classList.remove('details-view', 'list-view', 'grid-view', 'large-view', 'compact-view');
+
+            // Update menu checkmarks
+            document.querySelectorAll('.view-menu-item').forEach(function(el) {
+                el.classList.remove('active');
+            });
+            const activeItem = document.getElementById('opt-' + mode);
+            if (activeItem) activeItem.classList.add('active');
+
+            // View configurations
+            const viewConfigs = {
+                'details': { cls: 'details-view', showHeader: true, icon: '📑', label: 'Details' },
+                'list': { cls: 'list-view', showHeader: false, icon: '☰', label: 'List' },
+                'grid': { cls: 'grid-view', showHeader: false, icon: '⊞', label: 'Grid' },
+                'large': { cls: 'large-view', showHeader: false, icon: '🖼️', label: 'Large' },
+                'compact': { cls: 'compact-view', showHeader: false, icon: '🗂️', label: 'Small' }
+            };
+
+            const cfg = viewConfigs[mode] || viewConfigs['grid'];
+            filesContainer.classList.add(cfg.cls);
+            if (listHeader) listHeader.style.display = cfg.showHeader ? 'grid' : 'none';
+            if (iconEl) iconEl.textContent = cfg.icon;
+            if (labelEl) labelEl.textContent = cfg.label;
+
+            showToast('View: ' + cfg.label, cfg.icon);
         }
 
         function togglePreview() {
             const pane = document.getElementById('preview-pane');
+            const resizer = document.getElementById('preview-resizer');
             const btn = document.getElementById('btn-preview');
-            pane.classList.toggle('collapsed');
-            if (!pane.classList.contains('collapsed')) {
+            const isNowCollapsed = pane.classList.toggle('collapsed');
+            if (!isNowCollapsed) {
                 btn.classList.add('active');
+                if (resizer) resizer.style.display = 'block';
                 if (selectedItem) handlePreview(selectedItem.name, selectedItem.type === 'Directory');
             } else {
                 btn.classList.remove('active');
+                if (resizer) resizer.style.display = 'none';
             }
         }
 
@@ -2212,11 +4229,16 @@ public static class FileManagerWebApp
                 const isCut = clipboard && clipboard.action === 'cut' && clipboard.name === item.name;
 
                 const sep = isWindows ? '\\' : '/';
-                const fullItemPath = currentPath.endsWith(sep) ? currentPath + item.name : currentPath + sep + item.name;
+                const fullItemPath = (item.isSearchResult && item.path) ? item.path : (currentPath.endsWith(sep) ? currentPath + item.name : currentPath + sep + item.name);
 
                 let iconHtml = '<i>' + visual.icon + '</i>';
                 if (visual.isImage) {
                     iconHtml = '<img src="/api/files/raw?path=' + encodeURIComponent(fullItemPath) + '" class="item-thumb" onerror="this.onerror=null; this.outerHTML=\'<i>🖼️</i>\';"/>';
+                }
+
+                let locationHtml = '';
+                if (item.isSearchResult && item.directory) {
+                    locationHtml = '<span class="item-search-location" onclick="event.stopPropagation(); jumpToSearchResult(\'' + escapePath(item.directory) + '\', \'' + escapePath(item.name) + '\')" title="Jump to ' + escapeHtml(item.directory) + '">📂 ' + escapeHtml(item.directory) + '</span>';
                 }
 
                 let gitBadgeHtml = '';
@@ -2229,6 +4251,7 @@ public static class FileManagerWebApp
 
                 html += '<div class="item ' + className + (isSelected ? ' selected' : '') + (isCut ? ' cut-item' : '') + '" ' +
                         'onclick="handleItemClick(event, \'' + escapePath(item.name) + '\', ' + isDir + ')" ' +
+                        'onauxclick="handleItemAuxClick(event, \'' + escapePath(item.name) + '\', ' + isDir + ')" ' +
                         'ondblclick="handleDoubleClick(\'' + escapePath(item.name) + '\', ' + isDir + ')" ' +
                         'oncontextmenu="handleItemContextMenu(event, \'' + escapePath(item.name) + '\', ' + isDir + ')">' +
                         '<div class="item-icon-wrapper">' + iconHtml + (visual.badge ? '<span class="item-badge">' + visual.badge + '</span>' : '') + '</div>' +
@@ -2237,6 +4260,7 @@ public static class FileManagerWebApp
                         '<span class="item-name">' + escapeHtml(item.name) + '</span>' +
                         gitBadgeHtml +
                         '</div>' +
+                        locationHtml +
                         '</div>' +
                         '<span class="item-modified">' + modDate + '</span>' +
                         '<span class="item-type">' + visual.typeLabel + '</span>' +
@@ -2260,6 +4284,7 @@ public static class FileManagerWebApp
                 isWindows = currentPath.includes('\\');
                 document.getElementById('path').value = currentPath;
                 renderBreadcrumbs();
+                updateActiveTabAfterLoad(currentPath);
                 
                 currentItems = data.items;
                 selectedItem = null;
@@ -2321,12 +4346,657 @@ public static class FileManagerWebApp
         }
 
         function handleDoubleClick(name, isDir) {
-            const sep = isWindows ? '\\' : '/';
-            const nextPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
+            let nextPath;
+            if (selectedItem && selectedItem.path) {
+                nextPath = selectedItem.path;
+            } else {
+                const sep = isWindows ? '\\' : '/';
+                nextPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
+            }
             if (isDir) {
                 navigateTo(nextPath);
             } else {
                 openSelectedItemInEditor(nextPath);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 📊 RICH PREVIEW SYSTEM (CSV, Excel, Word, PDF, Media, Markdown)
+        // ══════════════════════════════════════════════════════════
+        let activeWorkbookMap = new Map();
+        let xlsxLoadingPromise = null;
+        let mammothLoadingPromise = null;
+
+        let activePdfMap = new Map();
+        let pdfjsLoadingPromise = null;
+
+        function ensurePdfJs() {
+            if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+            if (pdfjsLoadingPromise) return pdfjsLoadingPromise;
+            pdfjsLoadingPromise = new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+                s.onload = () => {
+                    try {
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                    } catch (e) {}
+                    resolve(window.pdfjsLib);
+                };
+                s.onerror = (e) => reject(new Error('PDF viewer requires an active internet connection to load PDF engine.'));
+                document.head.appendChild(s);
+            });
+            return pdfjsLoadingPromise;
+        }
+
+        async function renderPdfPage(uniqueId, pageNum) {
+            const state = activePdfMap.get(uniqueId);
+            if (!state) return;
+            if (pageNum < 1 || pageNum > state.totalPages) return;
+            state.pageNum = pageNum;
+
+            const container = document.getElementById(uniqueId);
+            if (!container) return;
+
+            const indicator = container.querySelector('.pdf-page-indicator');
+            if (indicator) indicator.innerText = pageNum + ' / ' + state.totalPages;
+
+            const viewportElem = container.querySelector('.pdf-scroll-viewport');
+            const canvas = container.querySelector('.pdf-canvas');
+            if (!canvas || !viewportElem) return;
+
+            try {
+                const page = await state.doc.getPage(pageNum);
+                const unscaledViewport = page.getViewport({ scale: 1.0 });
+
+                // Calculate base scale to fit container width smoothly
+                const containerWidth = Math.max(160, (viewportElem.clientWidth || (state.isQuickLook ? 750 : 280)) - 24);
+                const baseScale = containerWidth / unscaledViewport.width;
+                const finalScale = baseScale * (state.scale || 1.0);
+                const viewport = page.getViewport({ scale: finalScale });
+
+                const outputScale = window.devicePixelRatio || 1;
+                canvas.width = Math.floor(viewport.width * outputScale);
+                canvas.height = Math.floor(viewport.height * outputScale);
+                canvas.style.width = Math.floor(viewport.width) + 'px';
+                canvas.style.height = Math.floor(viewport.height) + 'px';
+
+                const ctx = canvas.getContext('2d');
+                ctx.save();
+                ctx.scale(outputScale, outputScale);
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+
+                if (state.renderTask) {
+                    try { state.renderTask.cancel(); } catch (e) {}
+                }
+                state.renderTask = page.render(renderContext);
+                await state.renderTask.promise;
+                ctx.restore();
+            } catch (err) {
+                if (err && err.name === 'RenderingCancelledException') return;
+                console.error('PDF page render error:', err);
+            }
+        }
+
+        function changePdfPage(uniqueId, delta) {
+            const state = activePdfMap.get(uniqueId);
+            if (!state) return;
+            const next = state.pageNum + delta;
+            if (next >= 1 && next <= state.totalPages) {
+                renderPdfPage(uniqueId, next);
+            }
+        }
+
+        function zoomPdf(uniqueId, delta) {
+            const state = activePdfMap.get(uniqueId);
+            if (!state) return;
+            state.scale = Math.max(0.4, Math.min(3.5, (state.scale || 1.0) + delta));
+            renderPdfPage(uniqueId, state.pageNum);
+        }
+
+        const knownBinaryExts = [
+            'zip', 'gz', 'tar', 'bz2', '7z', 'rar', 'dmg', 'iso', 'exe', 'dll', 'so', 'dylib',
+            'bin', 'dat', 'db', 'sqlite', 'sqlite3', 'class', 'pyc', 'o', 'obj', 'lib', 'a',
+            'wasm', 'jar', 'war', 'ear', 'pkg', 'deb', 'rpm', 'apk', 'ipa',
+            'psd', 'ai', 'sketch', 'blend', 'fbx', 'ttf', 'otf', 'woff', 'woff2', 'eot'
+        ];
+
+        function renderBinaryFileCard(name, ext, fullPath, icon, typeLabel, note) {
+            icon = icon || '📦';
+            typeLabel = typeLabel || 'Binary File';
+            return '<div class="media-preview-box" style="padding: 24px 16px;">' +
+                '<div class="media-icon-badge">' + icon + '</div>' +
+                '<div style="font-size: 15px; font-weight: 600; color: #fff; word-break: break-all;">' + escapeHtml(name) + '</div>' +
+                '<div class="preview-meta-pill" style="margin-top: 6px;">' + escapeHtml(typeLabel) + (ext ? ' • ' + ext.toUpperCase() : '') + '</div>' +
+                (note ? '<div style="font-size: 11px; color: var(--text-muted); margin-top: 8px; max-width: 320px; line-height: 1.4;">' + escapeHtml(note) + '</div>' : '') +
+                '<div style="display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; justify-content: center;">' +
+                '<button class="modal-btn confirm" onclick="openSelectedItemInEditor(\'' + escapePath(fullPath) + '\')">🚀 Open in Editor</button>' +
+                '<button class="modal-btn" onclick="revealSelectedItemInOS()">📂 Reveal in Finder</button>' +
+                '</div>' +
+                '</div>';
+        }
+
+        function ensureXlsx() {
+            if (window.XLSX) return Promise.resolve(window.XLSX);
+            if (xlsxLoadingPromise) return xlsxLoadingPromise;
+            xlsxLoadingPromise = new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                s.onload = () => resolve(window.XLSX);
+                s.onerror = (e) => reject(new Error('Excel viewer engine requires an active internet connection to load initial SheetJS script.'));
+                document.head.appendChild(s);
+            });
+            return xlsxLoadingPromise;
+        }
+
+        function ensureMammoth() {
+            if (window.mammoth) return Promise.resolve(window.mammoth);
+            if (mammothLoadingPromise) return mammothLoadingPromise;
+            mammothLoadingPromise = new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js';
+                s.onload = () => resolve(window.mammoth);
+                s.onerror = (e) => reject(new Error('Word viewer engine requires an active internet connection to load initial Mammoth script.'));
+                document.head.appendChild(s);
+            });
+            return mammothLoadingPromise;
+        }
+
+        function parseCsv(text, delimiter) {
+            if (!text) return { headers: [], rows: [], totalRows: 0, delimiter: ',' };
+            text = text.replace(/\uFEFF/g, '');
+            if (!delimiter) {
+                const firstLine = text.split(/\r\n|\n|\r/)[0] || '';
+                const commas = (firstLine.match(/,/g) || []).length;
+                const tabs = (firstLine.match(/\t/g) || []).length;
+                const semicolons = (firstLine.match(/;/g) || []).length;
+                if (tabs > commas && tabs > semicolons) delimiter = '\t';
+                else if (semicolons > commas && semicolons > tabs) delimiter = ';';
+                else delimiter = ',';
+            }
+
+            const rows = [];
+            let currentRow = [];
+            let currentCell = '';
+            let insideQuotes = false;
+            let i = 0;
+            const len = text.length;
+
+            while (i < len) {
+                const char = text[i];
+                const nextChar = text[i + 1];
+
+                if (char === '"') {
+                    if (insideQuotes && nextChar === '"') {
+                        currentCell += '"';
+                        i += 2;
+                        continue;
+                    } else {
+                        insideQuotes = !insideQuotes;
+                        i++;
+                        continue;
+                    }
+                }
+
+                if (!insideQuotes && char === delimiter) {
+                    currentRow.push(currentCell.trim());
+                    currentCell = '';
+                    i++;
+                    continue;
+                }
+
+                if (!insideQuotes && (char === '\r' || char === '\n')) {
+                    currentRow.push(currentCell.trim());
+                    currentCell = '';
+                    if (currentRow.length > 1 || (currentRow.length === 1 && currentRow[0] !== '')) {
+                        rows.push(currentRow);
+                    }
+                    currentRow = [];
+                    if (char === '\r' && nextChar === '\n') i++;
+                    i++;
+                    continue;
+                }
+
+                currentCell += char;
+                i++;
+            }
+
+            if (currentCell !== '' || currentRow.length > 0) {
+                currentRow.push(currentCell.trim());
+                if (currentRow.length > 1 || (currentRow.length === 1 && currentRow[0] !== '')) {
+                    rows.push(currentRow);
+                }
+            }
+
+            if (rows.length === 0) return { headers: [], rows: [], totalRows: 0, delimiter };
+            const headers = rows[0];
+            const dataRows = rows.slice(1);
+            return { headers, rows: dataRows, totalRows: dataRows.length, delimiter };
+        }
+
+        function renderTableHtml(headers, rows, totalRows, limit = 200) {
+            const displayRows = rows.slice(0, limit);
+            const maxCols = Math.max(headers ? headers.length : 0, ...rows.map(r => r.length));
+            const colHeaders = headers && headers.length > 0 ? [...headers] : [];
+            while (colHeaders.length < maxCols) {
+                colHeaders.push('Col ' + (colHeaders.length + 1));
+            }
+
+            let html = '<div class="preview-table-wrapper"><table class="preview-data-table">';
+            html += '<thead><tr><th class="idx-col">#</th>';
+            colHeaders.forEach(h => {
+                html += '<th>' + escapeHtml(h) + '</th>';
+            });
+            html += '</tr></thead>';
+            html += '<tbody>';
+            displayRows.forEach((row, idx) => {
+                html += '<tr><td class="idx-col">' + (idx + 1) + '</td>';
+                for (let c = 0; c < maxCols; c++) {
+                    const val = row[c] !== undefined ? String(row[c]) : '';
+                    html += '<td title="' + escapeHtml(val) + '">' + escapeHtml(val) + '</td>';
+                }
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            if (totalRows > limit) {
+                html += '<div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; text-align: right;">' +
+                        'Showing first ' + limit + ' of ' + totalRows.toLocaleString() + ' rows</div>';
+            }
+            return html;
+        }
+
+        function toggleCsvView(containerId, mode) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const textV = container.querySelector('.csv-text-view');
+            const tableV = container.querySelector('.csv-table-view');
+            const btns = container.querySelectorAll('.csv-toggle-btn');
+            btns.forEach(b => b.classList.toggle('active', b.getAttribute('data-mode') === mode));
+            if (mode === 'table') {
+                if (textV) textV.style.display = 'none';
+                if (tableV) tableV.style.display = 'block';
+            } else {
+                if (textV) textV.style.display = 'block';
+                if (tableV) tableV.style.display = 'none';
+            }
+        }
+
+        function switchExcelSheet(containerId, sheetName) {
+            const wb = activeWorkbookMap.get(containerId);
+            if (!wb) return;
+            const sheet = wb.Sheets[sheetName];
+            if (!sheet) return;
+
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            container.querySelectorAll('.sheet-tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-sheet') === sheetName);
+            });
+
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            const tableBox = container.querySelector('.excel-sheet-content');
+            if (!tableBox) return;
+
+            if (!data || data.length === 0) {
+                tableBox.innerHTML = '<div style="padding: 24px; color: var(--text-muted); text-align: center;">Sheet is empty.</div>';
+                return;
+            }
+
+            const headers = data[0].map(h => String(h !== undefined ? h : ''));
+            const rows = data.slice(1);
+            tableBox.innerHTML = renderTableHtml(headers, rows, rows.length, 250);
+        }
+
+        function renderSimpleMarkdown(md) {
+            if (!md) return '';
+            let html = escapeHtml(md);
+
+            // Code blocks
+            html = html.replace(/```([\s\S]*?)```/g, function(match, code) {
+                return '<pre><code>' + code.trim() + '</code></pre>';
+            });
+
+            // Inline code
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+            // Headings
+            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+            // Blockquotes
+            html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
+
+            // Bold & italic
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+            // Task list items
+            html = html.replace(/^- \[x\] (.*$)/gim, '<div style="display:flex;align-items:center;gap:6px;margin:3px 0;"><input type="checkbox" checked disabled> <span>$1</span></div>');
+            html = html.replace(/^- \[ \] (.*$)/gim, '<div style="display:flex;align-items:center;gap:6px;margin:3px 0;"><input type="checkbox" disabled> <span>$1</span></div>');
+
+            // Unordered lists
+            html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
+
+            // Paragraph breaks
+            html = html.replace(/\n\n/g, '<br><br>');
+
+            return html;
+        }
+
+        function toggleMarkdownView(containerId, mode) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const rendered = container.querySelector('.md-rendered-view');
+            const raw = container.querySelector('.md-raw-view');
+            const btns = container.querySelectorAll('.md-toggle-btn');
+            btns.forEach(b => b.classList.toggle('active', b.getAttribute('data-mode') === mode));
+            if (mode === 'rendered') {
+                if (rendered) rendered.style.display = 'block';
+                if (raw) raw.style.display = 'none';
+            } else {
+                if (rendered) rendered.style.display = 'none';
+                if (raw) raw.style.display = 'block';
+            }
+        }
+
+        async function renderFilePreview(targetElem, fullPath, name, isDir, isQuickLook = false) {
+            if (isDir) {
+                targetElem.innerHTML = '<div style="padding: 24px; text-align: center;">' +
+                    '<i style="font-size: 52px; font-style: normal;">📁</i>' +
+                    '<div style="font-size: 15px; font-weight: 600; margin-top: 8px;">' + escapeHtml(name) + '</div>' +
+                    '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Folder • Double-click to navigate</div>' +
+                    '</div>';
+                try {
+                    const res = await fetch('/api/files/details?path=' + encodeURIComponent(fullPath));
+                    if (res.ok) {
+                        const d = await res.json();
+                        const infoElem = targetElem.querySelector('div div:last-child');
+                        if (infoElem) infoElem.innerText = 'Contains ' + (d.itemCount || '0') + ' items';
+                    }
+                } catch {}
+                return;
+            }
+
+            const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+            const imgExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'];
+            const sheetExts = ['xlsx', 'xls'];
+            const csvExts = ['csv', 'tsv', 'tab'];
+            const docExts = ['docx'];
+            const pdfExts = ['pdf'];
+            const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
+            const videoExts = ['mp4', 'webm', 'mov', 'ogv'];
+            const mdExts = ['md', 'markdown'];
+
+            const uniqueId = 'preview-' + Math.random().toString(36).substring(2, 9);
+            const rawUrl = '/api/files/raw?path=' + encodeURIComponent(fullPath);
+
+            // 1. IMAGES
+            if (imgExts.includes(ext)) {
+                targetElem.innerHTML = '<div style="text-align: center; width: 100%;">' +
+                    '<img class="preview-image" src="' + rawUrl + '" alt="' + escapeHtml(name) + '" style="max-height: ' + (isQuickLook ? '65vh' : '380px') + '; object-fit: contain;" />' +
+                    '<div style="font-size: 11px; opacity: 0.7; margin-top: 8px;">' + ext.toUpperCase() + ' Image</div>' +
+                    '</div>';
+                return;
+            }
+
+            // 2. CSV / TSV TABLES
+            if (csvExts.includes(ext)) {
+                targetElem.innerHTML = '<div style="padding: 20px; text-align: center;"><div class="spinner" style="margin: 0 auto 10px;"></div>Loading spreadsheet...</div>';
+                try {
+                    const res = await fetch('/api/files/read?path=' + encodeURIComponent(fullPath));
+                    if (!res.ok) throw new Error('File read failed');
+                    let text = await res.text();
+                    text = text.replace(/\uFEFF/g, '');
+                    const { headers, rows, totalRows, delimiter } = parseCsv(text);
+                    const delimLabel = delimiter === '\t' ? 'Tab-Separated' : (delimiter === ';' ? 'Semicolon' : 'Comma-Separated');
+                    const defaultMode = 'table';
+                    const snippet = text.slice(0, isQuickLook ? 15000 : 4000);
+
+                    targetElem.innerHTML = '<div id="' + uniqueId + '" style="width: 100%;">' +
+                        '<div class="preview-badge-bar">' +
+                        '<span class="preview-badge">📊 ' + ext.toUpperCase() + ' (' + delimLabel + ')</span>' +
+                        '<div style="display: flex; gap: 4px; align-items: center;">' +
+                        '<span class="preview-meta-pill" style="margin-right: 6px;">' + totalRows.toLocaleString() + ' rows</span>' +
+                        '<button class="sheet-tab-btn csv-toggle-btn ' + (defaultMode === 'table' ? 'active' : '') + '" data-mode="table" onclick="toggleCsvView(\'' + uniqueId + '\', \'table\')">📊 Table</button>' +
+                        '<button class="sheet-tab-btn csv-toggle-btn ' + (defaultMode === 'text' ? 'active' : '') + '" data-mode="text" onclick="toggleCsvView(\'' + uniqueId + '\', \'text\')">📝 Text</button>' +
+                        '</div>' +
+                        '</div>' +
+                        '<div class="csv-text-view" style="' + (defaultMode === 'text' ? '' : 'display: none;') + '">' +
+                        '<pre style="width: 100%; box-sizing: border-box; background: #131317; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #a29bfe; max-height: ' + (isQuickLook ? '68vh' : '440px') + '; overflow: auto; white-space: pre-wrap;"><code>' + escapeHtml(snippet) + (text.length > snippet.length ? '\n\n... (preview truncated)' : '') + '</code></pre>' +
+                        '</div>' +
+                        '<div class="csv-table-view" style="' + (defaultMode === 'table' ? '' : 'display: none;') + '">' +
+                        renderTableHtml(headers, rows, totalRows, isQuickLook ? 300 : 150) +
+                        '</div>' +
+                        '</div>';
+                } catch (e) {
+                    targetElem.innerHTML = renderBinaryFileCard(name, ext, fullPath, '📊', 'CSV Document', 'Could not parse tabular data.');
+                }
+                return;
+            }
+
+            // 3. EXCEL WORKBOOKS (.xlsx, .xls)
+            if (sheetExts.includes(ext)) {
+                targetElem.innerHTML = '<div style="padding: 24px; text-align: center;"><div class="spinner" style="margin: 0 auto 10px;"></div>Loading Excel Workbook...</div>';
+                try {
+                    const res = await fetch(rawUrl);
+                    if (!res.ok) throw new Error('Failed to fetch file stream');
+                    const buffer = await res.arrayBuffer();
+                    const uint8 = new Uint8Array(buffer.slice(0, 4));
+                    const isZip = uint8[0] === 0x50 && uint8[1] === 0x4B;
+                    const isOldXls = uint8[0] === 0xD0 && uint8[1] === 0xCF;
+
+                    // Plain text file with .xlsx extension (e.g. manual mock or corrupted text)
+                    if (!isZip && !isOldXls) {
+                        const text = new TextDecoder('utf-8').decode(buffer);
+                        targetElem.innerHTML = '<div class="preview-badge-bar">' +
+                            '<span class="preview-badge">📄 Text Content (' + ext.toUpperCase() + ')</span>' +
+                            '</div>' +
+                            '<pre style="width: 100%; box-sizing: border-box; background: #131317; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #a29bfe; max-height: ' + (isQuickLook ? '66vh' : '420px') + '; overflow: auto; white-space: pre-wrap;"><code>' + escapeHtml(text.slice(0, 8000)) + '</code></pre>';
+                        return;
+                    }
+
+                    await ensureXlsx();
+                    const wb = XLSX.read(buffer, { type: 'array' });
+                    activeWorkbookMap.set(uniqueId, wb);
+
+                    let tabsHtml = '<div class="sheet-tabs-container">';
+                    wb.SheetNames.forEach((sName, idx) => {
+                        tabsHtml += '<button class="sheet-tab-btn ' + (idx === 0 ? 'active' : '') + '" data-sheet="' + escapeHtml(sName) + '" onclick="switchExcelSheet(\'' + uniqueId + '\', \'' + escapeHtml(sName) + '\')">📑 ' + escapeHtml(sName) + '</button>';
+                    });
+                    tabsHtml += '</div>';
+
+                    targetElem.innerHTML = '<div id="' + uniqueId + '" style="width: 100%;">' +
+                        '<div class="preview-badge-bar">' +
+                        '<span class="preview-badge">📗 Excel Workbook (' + ext.toUpperCase() + ')</span>' +
+                        '<span class="preview-meta-pill">' + wb.SheetNames.length + ' sheet(s)</span>' +
+                        '</div>' +
+                        tabsHtml +
+                        '<div class="excel-sheet-content"></div>' +
+                        '</div>';
+
+                    if (wb.SheetNames.length > 0) {
+                        switchExcelSheet(uniqueId, wb.SheetNames[0]);
+                    }
+                } catch (err) {
+                    targetElem.innerHTML = renderBinaryFileCard(name, ext, fullPath, '📗', 'Excel Spreadsheet', 'Contains binary workbook data. Click below to open in editor.');
+                }
+                return;
+            }
+
+            // 4. WORD DOCUMENTS (.docx)
+            if (docExts.includes(ext)) {
+                targetElem.innerHTML = '<div style="padding: 24px; text-align: center;"><div class="spinner" style="margin: 0 auto 10px;"></div>Rendering Word document...</div>';
+                try {
+                    const res = await fetch(rawUrl);
+                    if (!res.ok) throw new Error('Failed to fetch file stream');
+                    const buffer = await res.arrayBuffer();
+                    const uint8 = new Uint8Array(buffer.slice(0, 4));
+                    const isZip = uint8[0] === 0x50 && uint8[1] === 0x4B;
+
+                    if (!isZip) {
+                        const text = new TextDecoder('utf-8').decode(buffer);
+                        targetElem.innerHTML = '<pre style="width: 100%; box-sizing: border-box; background: #131317; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #a29bfe; max-height: ' + (isQuickLook ? '66vh' : '420px') + '; overflow: auto; white-space: pre-wrap;"><code>' + escapeHtml(text.slice(0, 8000)) + '</code></pre>';
+                        return;
+                    }
+
+                    await ensureMammoth();
+                    const result = await mammoth.convertToHtml({ arrayBuffer: buffer });
+                    targetElem.innerHTML = '<div class="preview-badge-bar">' +
+                        '<span class="preview-badge">📘 Word Document (.docx)</span>' +
+                        '<span class="preview-meta-pill">Rich Text View</span>' +
+                        '</div>' +
+                        '<div class="doc-paper-view" style="max-height: ' + (isQuickLook ? '68vh' : '480px') + ';">' + (result.value || '<p><em>Empty document</em></p>') + '</div>';
+                } catch (err) {
+                    targetElem.innerHTML = renderBinaryFileCard(name, ext, fullPath, '📘', 'Word Document', 'Contains binary document data. Click below to open in editor.');
+                }
+                return;
+            }
+
+            // 5. PDF DOCUMENTS (.pdf)
+            if (pdfExts.includes(ext)) {
+                targetElem.innerHTML = '<div style="padding: 24px; text-align: center;"><div class="spinner" style="margin: 0 auto 10px;"></div>Rendering PDF preview...</div>';
+                try {
+                    await ensurePdfJs();
+                    const loadingTask = window.pdfjsLib.getDocument({ url: rawUrl });
+                    const pdfDoc = await loadingTask.promise;
+                    const totalPages = pdfDoc.numPages;
+
+                    activePdfMap.set(uniqueId, {
+                        doc: pdfDoc,
+                        pageNum: 1,
+                        totalPages: totalPages,
+                        scale: 1.0,
+                        isQuickLook: isQuickLook
+                    });
+
+                    targetElem.innerHTML = '<div id="' + uniqueId + '" style="width: 100%; display: flex; flex-direction: column; gap: 6px;">' +
+                        '<div class="preview-badge-bar">' +
+                        '<span class="preview-badge">📕 PDF Document</span>' +
+                        '<div style="display: flex; gap: 4px; align-items: center;">' +
+                        '<button class="sheet-tab-btn" onclick="changePdfPage(\'' + uniqueId + '\', -1)" title="Previous Page">◀</button>' +
+                        '<span class="preview-meta-pill pdf-page-indicator" style="min-width: 55px; text-align: center;">1 / ' + totalPages + '</span>' +
+                        '<button class="sheet-tab-btn" onclick="changePdfPage(\'' + uniqueId + '\', 1)" title="Next Page">▶</button>' +
+                        '<button class="sheet-tab-btn" onclick="zoomPdf(\'' + uniqueId + '\', 0.2)" title="Zoom In">🔍+</button>' +
+                        '<button class="sheet-tab-btn" onclick="zoomPdf(\'' + uniqueId + '\', -0.2)" title="Zoom Out">🔍−</button>' +
+                        (!isQuickLook ? '<button class="sheet-tab-btn" onclick="toggleQuickLook()" title="Expand in Quick Look (Space)">👁️ Quick Look</button>' : '') +
+                        '</div>' +
+                        '</div>' +
+                        '<div class="pdf-scroll-viewport" style="width: 100%; max-height: ' + (isQuickLook ? '72vh' : '480px') + '; overflow: auto; background: #1a1a22; border-radius: 8px; border: 1px solid var(--border-color); text-align: center; padding: 12px 6px; box-sizing: border-box; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);">' +
+                        '<canvas class="pdf-canvas" style="display: inline-block; max-width: 100%; height: auto; box-shadow: 0 4px 18px rgba(0,0,0,0.6); border-radius: 4px; background: #fff;"></canvas>' +
+                        '</div>' +
+                        '<div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px;">' +
+                        '<button class="sheet-tab-btn" onclick="openSelectedItemInEditor(\'' + escapePath(fullPath) + '\')">🚀 Open in Editor</button>' +
+                        '<button class="sheet-tab-btn" onclick="revealSelectedItemInOS()">📂 Finder</button>' +
+                        '<a href="' + rawUrl + '" target="_blank" style="color: var(--accent); text-decoration: none; font-size: 11px; display: inline-flex; align-items: center; margin-left: 4px;">↗ Raw</a>' +
+                        '</div>' +
+                        '</div>';
+
+                    setTimeout(() => {
+                        renderPdfPage(uniqueId, 1);
+                    }, 25);
+                } catch (pdfErr) {
+                    console.warn('PDF.js rendering fallback:', pdfErr);
+                    targetElem.innerHTML = '<div id="' + uniqueId + '" style="width: 100%;">' +
+                        '<div class="preview-badge-bar">' +
+                        '<span class="preview-badge">📕 PDF Document</span>' +
+                        '<div style="display: flex; gap: 6px;">' +
+                        '<button class="sheet-tab-btn" onclick="openSelectedItemInEditor(\'' + escapePath(fullPath) + '\')">🚀 Open in Editor</button>' +
+                        '<button class="sheet-tab-btn" onclick="revealSelectedItemInOS()">📂 Finder</button>' +
+                        '</div>' +
+                        '</div>' +
+                        '<object data="' + rawUrl + '#toolbar=0" type="application/pdf" width="100%" height="' + (isQuickLook ? '70vh' : '460px') + '" style="border: 1px solid var(--border-color); border-radius: 6px; background: #222;">' +
+                        '<iframe src="' + rawUrl + '#toolbar=0" width="100%" height="' + (isQuickLook ? '70vh' : '460px') + '" style="border:none;">' +
+                        renderBinaryFileCard(name, 'pdf', fullPath, '📕', 'Adobe PDF Document', 'Preview unavailable in this frame.') +
+                        '</iframe>' +
+                        '</object>' +
+                        '</div>';
+                }
+                return;
+            }
+
+            // 6. AUDIO FILES
+            if (audioExts.includes(ext)) {
+                targetElem.innerHTML = '<div class="media-preview-box">' +
+                    '<div class="media-icon-badge">🎵</div>' +
+                    '<div style="font-size: 14px; font-weight: 600;">' + escapeHtml(name) + '</div>' +
+                    '<div class="preview-meta-pill" style="margin-top: 4px;">Audio Track • ' + ext.toUpperCase() + '</div>' +
+                    '<audio controls autoplay src="' + rawUrl + '"></audio>' +
+                    '</div>';
+                return;
+            }
+
+            // 7. VIDEO FILES
+            if (videoExts.includes(ext)) {
+                targetElem.innerHTML = '<div class="media-preview-box" style="padding: 10px;">' +
+                    '<video controls autoplay muted playsinline src="' + rawUrl + '" style="max-height: ' + (isQuickLook ? '65vh' : '400px') + ';"></video>' +
+                    '<div class="preview-meta-pill" style="margin-top: 8px;">Video Clip • ' + ext.toUpperCase() + '</div>' +
+                    '</div>';
+                return;
+            }
+
+            // 8. MARKDOWN FILES (.md, .markdown)
+            if (mdExts.includes(ext)) {
+                targetElem.innerHTML = '<div style="padding: 16px; text-align: center;"><div class="spinner" style="margin: 0 auto 10px;"></div>Loading Markdown...</div>';
+                try {
+                    const res = await fetch('/api/files/read?path=' + encodeURIComponent(fullPath));
+                    if (!res.ok) throw new Error('File read failed');
+                    const text = await res.text();
+                    const renderedHtml = renderSimpleMarkdown(text);
+                    const snippet = text.slice(0, 15000);
+
+                    targetElem.innerHTML = '<div id="' + uniqueId + '" style="width: 100%;">' +
+                        '<div class="preview-badge-bar">' +
+                        '<span class="preview-badge">📝 Markdown</span>' +
+                        '<div style="display: flex; gap: 4px;">' +
+                        '<button class="sheet-tab-btn md-toggle-btn active" data-mode="rendered" onclick="toggleMarkdownView(\'' + uniqueId + '\', \'rendered\')">👁️ Rendered</button>' +
+                        '<button class="sheet-tab-btn md-toggle-btn" data-mode="raw" onclick="toggleMarkdownView(\'' + uniqueId + '\', \'raw\')">📝 Raw</button>' +
+                        '</div>' +
+                        '</div>' +
+                        '<div class="md-rendered-view" style="max-height: ' + (isQuickLook ? '68vh' : '460px') + ';">' + renderedHtml + '</div>' +
+                        '<div class="md-raw-view" style="display: none;"><pre style="background: #131317; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #a29bfe; max-height: ' + (isQuickLook ? '68vh' : '460px') + '; overflow: auto; white-space: pre-wrap;"><code>' + escapeHtml(snippet) + (text.length > 15000 ? '\n\n... (preview truncated)' : '') + '</code></pre></div>' +
+                        '</div>';
+                } catch (e) {
+                    targetElem.innerHTML = '<div style="padding: 20px; color: var(--danger);">Could not read markdown.</div>';
+                }
+                return;
+            }
+
+            // 9. KNOWN BINARY FILES
+            if (knownBinaryExts.includes(ext)) {
+                targetElem.innerHTML = renderBinaryFileCard(name, ext, fullPath, '📦', ext.toUpperCase() + ' Binary File', 'This is a binary file and cannot be previewed as text.');
+                return;
+            }
+
+            // 10. CODE & TEXT FALLBACK
+            targetElem.innerHTML = '<div style="padding: 16px; opacity: 0.6;">Loading preview...</div>';
+            try {
+                const res = await fetch('/api/files/read?path=' + encodeURIComponent(fullPath));
+                if (res.ok) {
+                    const text = await res.text();
+                    // Catch-all: check if text contains null bytes or binary control characters
+                    if (text.includes('\0') || /[\x00-\x08\x0E-\x1F]/.test(text.slice(0, 512))) {
+                        targetElem.innerHTML = renderBinaryFileCard(name, ext, fullPath, '📦', 'Binary File', 'File contains binary data and cannot be displayed as plain text.');
+                        return;
+                    }
+                    const lineCount = (text.match(/\n/g) || []).length + 1;
+                    const charCount = text.length;
+                    const snippet = text.slice(0, isQuickLook ? 12000 : 4000);
+
+                    targetElem.innerHTML = '<div class="preview-badge-bar">' +
+                        '<span class="preview-badge">📄 ' + (ext ? ext.toUpperCase() : 'TEXT') + ' File</span>' +
+                        '<span class="preview-meta-pill">' + lineCount.toLocaleString() + ' lines • ' + formatBytes(charCount) + '</span>' +
+                        '</div>' +
+                        '<pre style="width: 100%; box-sizing: border-box; background: #131317; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #a29bfe; max-height: ' + (isQuickLook ? '66vh' : '420px') + '; overflow: auto; white-space: pre-wrap;"><code>' + escapeHtml(snippet) + (text.length > snippet.length ? '\n\n... (preview truncated)' : '') + '</code></pre>';
+                } else {
+                    targetElem.innerHTML = renderBinaryFileCard(name, ext, fullPath, '📦', 'Binary or Unreadable File');
+                }
+            } catch (e) {
+                targetElem.innerHTML = renderBinaryFileCard(name, ext, fullPath, '📦', 'Binary or Unreadable File');
             }
         }
 
@@ -2338,33 +5008,9 @@ public static class FileManagerWebApp
             document.querySelector('#preview-pane h2').innerText = name;
             
             const sep = isWindows ? '\\' : '/';
-            const fullPath = currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name;
+            const fullPath = (selectedItem && selectedItem.path) ? selectedItem.path : (currentPath.endsWith(sep) ? currentPath + name : currentPath + sep + name);
 
-            if (isDir) {
-                previewContent.innerHTML = '<div style="padding: 10px 0;"><strong>📁 Folder</strong><br><br>Double-click to explore contents.</div>';
-                return;
-            }
-
-            const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-            const imgExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
-
-            if (imgExts.includes(ext)) {
-                previewContent.innerHTML = '<img class="preview-image" src="/api/files/raw?path=' + encodeURIComponent(fullPath) + '" alt="' + escapeHtml(name) + '" /><br><br><div style="font-size: 11px; opacity: 0.7;">Image format: ' + ext.toUpperCase() + '</div>';
-            } else {
-                previewContent.innerHTML = '<div style="opacity: 0.6;">Loading preview...</div>';
-                try {
-                    const res = await fetch('/api/files/read?path=' + encodeURIComponent(fullPath));
-                    if (res.ok) {
-                        const text = await res.text();
-                        const snippet = text.slice(0, 3000);
-                        previewContent.innerHTML = '<pre><code>' + escapeHtml(snippet) + (text.length > 3000 ? '\n\n... (preview truncated)' : '') + '</code></pre>';
-                    } else {
-                        previewContent.innerHTML = '<div style="opacity: 0.6;">Binary or unreadable preview. Double-click to open in VS Code.</div>';
-                    }
-                } catch (e) {
-                    previewContent.innerHTML = '<div style="opacity: 0.6;">Could not generate preview.</div>';
-                }
-            }
+            await renderFilePreview(previewContent, fullPath, name, isDir, false);
         }
 
         // ══════════════════════════════════════════════════════════
@@ -2382,45 +5028,16 @@ public static class FileManagerWebApp
             }
 
             const sep = isWindows ? '\\' : '/';
-            const fullPath = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
+            const fullPath = (selectedItem && selectedItem.path) ? selectedItem.path : (currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name);
             const qlTitle = document.getElementById('ql-title');
             const qlBody = document.getElementById('ql-body');
 
             qlTitle.innerText = selectedItem.name;
-            qlBody.innerHTML = '<div style="padding: 30px;"><div class="spinner" style="width: 28px; height: 28px; border: 3px solid rgba(108, 92, 231, 0.2); border-top-color: #6c5ce7; border-radius: 50%; animation: spin 0.8s linear infinite;"></div></div>';
+            qlBody.innerHTML = '<div style="padding: 30px; text-align: center;"><div class="spinner" style="margin: 0 auto 10px;"></div>Loading Quick Look...</div>';
             modal.style.display = 'flex';
 
             const isDir = selectedItem.type === 'Directory';
-            const ext = selectedItem.name.includes('.') ? selectedItem.name.split('.').pop().toLowerCase() : '';
-            const imgExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'];
-
-            if (isDir) {
-                try {
-                    const res = await fetch('/api/files/details?path=' + encodeURIComponent(fullPath));
-                    const data = await res.json();
-                    qlBody.innerHTML = '<div style="text-align: center; padding: 20px;">' +
-                                       '<i style="font-size: 54px; font-style: normal;">📁</i>' +
-                                       '<div style="font-size: 16px; font-weight: 600; margin-top: 8px;">' + escapeHtml(selectedItem.name) + '</div>' +
-                                       '<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Contains ' + (data.itemCount || '0') + ' items</div>' +
-                                       '</div>';
-                } catch {
-                    qlBody.innerHTML = '<div style="padding: 20px; font-size: 13px;">📁 Folder: ' + escapeHtml(selectedItem.name) + '</div>';
-                }
-            } else if (imgExts.includes(ext)) {
-                qlBody.innerHTML = '<img src="/api/files/raw?path=' + encodeURIComponent(fullPath) + '" style="max-width: 100%; max-height: 50vh; object-fit: contain; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" />';
-            } else {
-                try {
-                    const res = await fetch('/api/files/read?path=' + encodeURIComponent(fullPath));
-                    if (res.ok) {
-                        const text = await res.text();
-                        qlBody.innerHTML = '<pre style="width: 100%; background: #131317; padding: 14px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #a29bfe; max-height: 50vh; overflow: auto; white-space: pre-wrap;"><code>' + escapeHtml(text.slice(0, 8000)) + '</code></pre>';
-                    } else {
-                        qlBody.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-muted);">Binary file. Press Enter to open in editor.</div>';
-                    }
-                } catch {
-                    qlBody.innerHTML = '<div style="padding: 20px; color: var(--text-muted);">Could not load preview.</div>';
-                }
-            }
+            await renderFilePreview(qlBody, fullPath, selectedItem.name, isDir, true);
         }
 
         function closeQuickLook() {
@@ -2795,6 +5412,25 @@ public static class FileManagerWebApp
             document.querySelectorAll('.modal-overlay').forEach(function(m) { m.style.display = 'none'; });
         }
 
+        function openHelpModal(tab = 'shortcuts') {
+            hideContextMenu();
+            hideModals();
+            switchHelpTab(tab);
+            const modal = document.getElementById('modal-help');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function switchHelpTab(tabName) {
+            document.querySelectorAll('.help-tab-btn').forEach(function(btn) { btn.classList.remove('active'); });
+            document.querySelectorAll('.help-pane').forEach(function(pane) { pane.classList.remove('active'); });
+            
+            const activeBtn = document.getElementById('help-btn-' + tabName);
+            if (activeBtn) activeBtn.classList.add('active');
+            
+            const activePane = document.getElementById('help-pane-' + tabName);
+            if (activePane) activePane.classList.add('active');
+        }
+
         function openSettingsModal() {
             hideContextMenu();
             const modal = document.getElementById('modal-settings');
@@ -2956,6 +5592,8 @@ public static class FileManagerWebApp
             
             const menu = document.getElementById('context-menu');
             document.getElementById('ctx-open').style.display = 'flex';
+            const openTabItem = document.getElementById('ctx-open-new-tab');
+            if (openTabItem) openTabItem.style.display = isDir ? 'flex' : 'none';
             document.getElementById('ctx-quicklook').style.display = 'flex';
             document.getElementById('ctx-rename').style.display = 'flex';
             document.getElementById('ctx-copy').style.display = 'flex';
@@ -3029,7 +5667,10 @@ public static class FileManagerWebApp
         }
 
         function hideContextMenu() {
-            document.getElementById('context-menu').style.display = 'none';
+            const ctxMenu = document.getElementById('context-menu');
+            if (ctxMenu) ctxMenu.style.display = 'none';
+            const tabMenu = document.getElementById('tab-context-menu');
+            if (tabMenu) tabMenu.style.display = 'none';
         }
 
         // ══════════════════════════════════════════════════════════
@@ -3127,6 +5768,7 @@ public static class FileManagerWebApp
         // ══════════════════════════════════════════════════════════
         document.addEventListener('click', function(e) {
             hideContextMenu();
+            closeViewMenu();
             const container = document.querySelector('.path-bar-container');
             if (container && !container.contains(e.target)) {
                 closePathDropdown();
@@ -3138,6 +5780,7 @@ public static class FileManagerWebApp
             
             if (e.key === 'Escape') {
                 closePathDropdown();
+                closeViewMenu();
                 hideModals();
                 hideContextMenu();
                 closeQuickLook();
@@ -3147,6 +5790,44 @@ public static class FileManagerWebApp
             }
 
             if (isEditing) return;
+
+            // ? or F1: Open Feature Guide & Keyboard Shortcuts
+            if (e.key === '?' || (e.shiftKey && e.key === '/') || e.key === 'F1') {
+                e.preventDefault();
+                openHelpModal();
+                return;
+            }
+
+            // Ctrl+T / Cmd+T: New Tab
+            if ((e.ctrlKey || e.metaKey) && (e.key === 't' || e.key === 'T')) {
+                e.preventDefault();
+                addNewTab();
+                return;
+            }
+
+            // Ctrl+W / Cmd+W: Close Tab
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 'W')) {
+                e.preventDefault();
+                closeCurrentTab();
+                return;
+            }
+
+            // Ctrl+Tab / Ctrl+Shift+Tab: Cycle Tabs
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Tab') {
+                e.preventDefault();
+                cycleTabs(e.shiftKey ? -1 : 1);
+                return;
+            }
+
+            // Alt+1 to Alt+9: Switch to specific tab index
+            if (e.altKey && e.key >= '1' && e.key <= '9') {
+                const targetIdx = parseInt(e.key, 10) - 1;
+                if (targetIdx < tabs.length) {
+                    e.preventDefault();
+                    switchToTab(tabs[targetIdx].id);
+                    return;
+                }
+            }
 
             // Instant '/' quick filter hotkey
             if (e.key === '/') {
@@ -3263,8 +5944,13 @@ public static class FileManagerWebApp
         }
 
         function escapeHtml(text) {
-            if (!text) return '';
-            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+            if (text === null || text === undefined) return '';
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
 
         function escapePath(path) {
@@ -3289,10 +5975,46 @@ public static class FileManagerWebApp
             }, 2500);
         }
 
+        // Initialize Tabs
+        if (!loadTabsState()) {
+            tabs = [{
+                id: 'tab_init',
+                title: 'Loading...',
+                path: '.',
+                history: ['.'],
+                historyIndex: 0,
+                sort: { field: 'name', asc: true },
+                searchQuery: ''
+            }];
+            activeTabId = 'tab_init';
+        }
+        renderTabs();
+
+        // Mousewheel horizontal scroll on tabs bar
+        const tabsBarEl = document.getElementById('tabs-bar');
+        if (tabsBarEl) {
+            tabsBarEl.addEventListener('wheel', function(e) {
+                if (e.deltaY !== 0) {
+                    e.preventDefault();
+                    tabsBarEl.scrollLeft += e.deltaY;
+                }
+            }, { passive: false });
+        }
+
         // Initialize
         fetchRoots();
         initBookmarks();
-        navigateTo('.');
+        const initialTab = tabs.find(function(t) { return t.id === activeTabId; }) || tabs[0];
+        navigateTo(initialTab.path);
+        setView(currentViewMode);
+    
+        // Initialize Resizable Splitters
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            initSplitters();
+        } else {
+            window.addEventListener('DOMContentLoaded', initSplitters);
+        }
+
     </script>
 </body>
 </html>
