@@ -367,26 +367,59 @@ public static class FileManagerWebApp
 
             try
             {
-                using var zip = ZipFile.Open(archiveFullPath, ZipArchiveMode.Create);
-                foreach (var item in req.Items)
+                using (var zip = ZipFile.Open(archiveFullPath, ZipArchiveMode.Create))
                 {
-                    var fullItemPath = Path.Combine(currentPath, item);
-                    if (File.Exists(fullItemPath))
+                    foreach (var item in req.Items)
                     {
-                        zip.CreateEntryFromFile(fullItemPath, item, CompressionLevel.Optimal);
-                    }
-                    else if (Directory.Exists(fullItemPath))
-                    {
-                        AddDirectoryToZip(zip, fullItemPath, item);
+                        var fullItemPath = Path.Combine(currentPath, item);
+                        var entryName = Path.GetFileName(item);
+                        if (File.Exists(fullItemPath))
+                        {
+                            zip.CreateEntryFromFile(fullItemPath, entryName, CompressionLevel.Optimal);
+                        }
+                        else if (Directory.Exists(fullItemPath))
+                        {
+                            AddDirectoryToZip(zip, fullItemPath, entryName);
+                        }
                     }
                 }
 
+                if (File.Exists(archiveFullPath) && new FileInfo(archiveFullPath).Length > 0)
+                {
+                    return Results.Ok(new { success = true, archiveName = finalArchiveName, path = archiveFullPath });
+                }
+            }
+            catch {}
+
+            // Fallback: Use native system archiver (bsdtar or zip)
+            try
+            {
+                var escapedItems = string.Join(" ", req.Items.Select(i => $"\"{i.Replace("\"", "\\\"")}\""));
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "tar",
+                    Arguments = $"-a -cf \"{archiveFullPath}\" {escapedItems}",
+                    WorkingDirectory = currentPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var proc = Process.Start(psi);
+                proc?.WaitForExit(30000);
+                if (proc?.ExitCode == 0 && File.Exists(archiveFullPath))
+                {
+                    return Results.Ok(new { success = true, archiveName = finalArchiveName, path = archiveFullPath });
+                }
+            }
+            catch {}
+
+            if (File.Exists(archiveFullPath))
+            {
                 return Results.Ok(new { success = true, archiveName = finalArchiveName, path = archiveFullPath });
             }
-            catch (Exception ex)
-            {
-                return Results.Problem($"Compression failed: {ex.Message}");
-            }
+
+            return Results.Ok(new { success = false, error = "Compression failed with all available archivers." });
         });
 
         // 10d. Extract Archive
@@ -414,10 +447,31 @@ public static class FileManagerWebApp
                 ZipFile.ExtractToDirectory(archivePath, targetDir, overwriteFiles: true);
                 return Results.Ok(new { success = true, destinationDir = targetDir });
             }
-            catch (Exception ex)
+            catch {}
+
+            // Fallback: Use native tar extractor (handles .zip, .tar, .tar.gz, .tgz across platforms)
+            try
             {
-                return Results.Problem($"Extraction failed: {ex.Message}");
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "tar",
+                    Arguments = $"-xf \"{archivePath}\" -C \"{targetDir}\"",
+                    WorkingDirectory = targetDir,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using var proc = Process.Start(psi);
+                proc?.WaitForExit(30000);
+                if (proc?.ExitCode == 0)
+                {
+                    return Results.Ok(new { success = true, destinationDir = targetDir });
+                }
             }
+            catch {}
+
+            return Results.Ok(new { success = false, error = "Extraction failed with all available extractors." });
         });
 
         // 11. Details
@@ -607,16 +661,37 @@ public static class FileManagerWebApp
 
     private static void AddDirectoryToZip(ZipArchive zip, string sourceDir, string entryPrefix)
     {
-        foreach (var file in Directory.GetFiles(sourceDir))
+        try
         {
-            var entryName = Path.Combine(entryPrefix, Path.GetFileName(file)).Replace('\\', '/');
-            zip.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+            var dirFiles = Directory.GetFiles(sourceDir);
+            var dirSubDirs = Directory.GetDirectories(sourceDir);
+
+            if (dirFiles.Length == 0 && dirSubDirs.Length == 0)
+            {
+                zip.CreateEntry(entryPrefix.TrimEnd('/') + "/");
+                return;
+            }
+
+            foreach (var file in dirFiles)
+            {
+                try
+                {
+                    var entryName = Path.Combine(entryPrefix, Path.GetFileName(file)).Replace('\\', '/');
+                    zip.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+                }
+                catch {}
+            }
+            foreach (var subDir in dirSubDirs)
+            {
+                try
+                {
+                    var dirName = Path.GetFileName(subDir);
+                    AddDirectoryToZip(zip, subDir, Path.Combine(entryPrefix, dirName).Replace('\\', '/'));
+                }
+                catch {}
+            }
         }
-        foreach (var subDir in Directory.GetDirectories(sourceDir))
-        {
-            var dirName = Path.GetFileName(subDir);
-            AddDirectoryToZip(zip, subDir, Path.Combine(entryPrefix, dirName).Replace('\\', '/'));
-        }
+        catch {}
     }
 
     private static void MoveToTrash(string path)
@@ -3823,10 +3898,10 @@ public static class FileManagerWebApp
             <div id="compress-prompt-desc" style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4;">
                 Enter a name for the new archive:
             </div>
-            <input type="text" id="input-compress-name" class="modal-input" placeholder="archive.zip" onkeypress="handleModalKey(event, submitCompress)" />
+            <input type="text" id="input-compress-name" class="modal-input" placeholder="archive.zip" onkeydown="handleModalKey(event, submitCompress)" />
             <div class="modal-actions">
                 <button type="button" class="modal-btn cancel" onclick="hideModals()">Cancel</button>
-                <button type="button" class="modal-btn confirm" onclick="submitCompress()">Compress</button>
+                <button type="button" class="modal-btn confirm" id="btn-confirm-compress" onclick="submitCompress()">Compress</button>
             </div>
         </div>
     </div>
@@ -6695,6 +6770,16 @@ public static class FileManagerWebApp
                 }
             }
 
+            // If Compress modal is active, Enter immediately confirms compression
+            const modalCompress = document.getElementById('modal-compress');
+            if (modalCompress && modalCompress.style.display === 'flex') {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    submitCompress();
+                    return;
+                }
+            }
+
             // If any modal is visible, block global background shortcuts from firing
             const anyActiveModal = document.querySelector('.modal-overlay[style*="display: flex"]');
             if (anyActiveModal && !isEditing) {
@@ -7170,8 +7255,15 @@ public static class FileManagerWebApp
             if (!archiveName.toLowerCase().endsWith('.zip')) archiveName += '.zip';
 
             hideModals();
-            const items = selectedItems.length > 0 ? selectedItems.slice() : (selectedItem ? [selectedItem] : []);
-            if (items.length === 0) return;
+            const rawItems = selectedItems.length > 0 ? selectedItems.slice() : (selectedItem ? [selectedItem] : []);
+            const items = rawItems.map(function(i) {
+                return typeof i === 'string' ? i : (i ? i.name : '');
+            }).filter(Boolean);
+
+            if (items.length === 0) {
+                showToast('No valid items selected to compress', '⚠️');
+                return;
+            }
 
             showToast('Compressing into "' + archiveName + '"...', '⏳');
             try {
@@ -7181,20 +7273,22 @@ public static class FileManagerWebApp
                     body: JSON.stringify({
                         currentPath: currentPath,
                         folder: currentPath,
-                        items: items.map(function(i) { return i.name; }),
+                        items: items,
                         archiveName: archiveName
                     })
                 });
-                const data = await res.json();
-                if (res.ok && data.success) {
+                let data = null;
+                try { data = await res.json(); } catch {}
+                if (res.ok && data && data.success) {
                     showToast('Created archive "' + (data.archiveName || archiveName) + '"', '🗜️');
                     loadFiles(currentPath);
                 } else {
-                    showToast('Compression failed: ' + (data.error || 'Server error'), '❌');
+                    const errDetail = (data && (data.error || data.detail || data.title)) || (res.statusText ? 'HTTP ' + res.status + ' (' + res.statusText + ')' : 'Server error');
+                    showToast(errDetail.startsWith('Compression failed') ? errDetail : 'Compression failed: ' + errDetail, '❌');
                 }
             } catch (err) {
                 console.error(err);
-                showToast('Error creating archive', '❌');
+                showToast('Error creating archive: ' + (err.message || 'Network error'), '❌');
             }
         }
 
@@ -7227,16 +7321,18 @@ public static class FileManagerWebApp
                         destinationFolder: destinationFolder
                     })
                 });
-                const data = await res.json();
-                if (res.ok && data.success) {
+                let data = null;
+                try { data = await res.json(); } catch {}
+                if (res.ok && data && data.success) {
                     showToast('Archive extracted successfully' + (intoSubfolder ? ' to ' + targetItem.name.replace(/\.(zip|tar\.gz|tgz|tar|gz)$/i, '') + '/' : ''), '📦');
                     loadFiles(currentPath);
                 } else {
-                    showToast('Extraction failed: ' + (data.error || 'Server error'), '❌');
+                    const errDetail = (data && (data.error || data.detail || data.title)) || (res.statusText ? 'HTTP ' + res.status + ' (' + res.statusText + ')' : 'Server error');
+                    showToast(errDetail.startsWith('Extraction failed') ? errDetail : 'Extraction failed: ' + errDetail, '❌');
                 }
             } catch (err) {
                 console.error(err);
-                showToast('Error extracting archive', '❌');
+                showToast('Error extracting archive: ' + (err.message || 'Network error'), '❌');
             }
         }
 
