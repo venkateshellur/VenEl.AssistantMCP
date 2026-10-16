@@ -50,6 +50,7 @@
     <ProjectReference Include="..\VenEl.MCP.FTP\VenEl.MCP.FTP.csproj" />
     <ProjectReference Include="..\VenEl.MCP.ServiceNow\VenEl.MCP.ServiceNow.csproj" />
     <ProjectReference Include="..\VenEl.MCP.FileManager\VenEl.MCP.FileManager.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Decompiler\VenEl.MCP.Decompiler.csproj" />
   </ItemGroup>
 
   <ItemGroup>

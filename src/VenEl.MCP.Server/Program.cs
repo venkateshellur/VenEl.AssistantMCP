@@ -24,6 +24,7 @@ using VenEl.MCP.Host.Extensions;
 using VenEl.MCP.FTP.Extensions;
 using VenEl.MCP.ServiceNow.Extensions;
 using VenEl.MCP.FileManager.Extensions;
+using VenEl.MCP.Decompiler.Extensions;
 // ─────────────────────────────────────────────────────────────────────────────
 // VenEl MCP Assistant – STDIO MCP Server
 //
@@ -81,6 +82,7 @@ builder.Services.AddHostFeature(builder.Configuration);
 builder.Services.AddFtpFeature();
 builder.Services.AddServiceNowFeature(builder.Configuration);
 builder.Services.AddFileManagerFeature(builder.Configuration);
+builder.Services.AddDecompilerFeature(builder.Configuration);
 // Add future features below — one line each, fully independent:
 // builder.Services.AddAzureFeature(builder.Configuration);
 // builder.Services.AddAwsFeature(builder.Configuration);

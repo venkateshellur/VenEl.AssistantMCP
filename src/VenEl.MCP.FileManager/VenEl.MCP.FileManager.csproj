@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\VenEl.MCP.Core\VenEl.MCP.Core.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Decompiler\VenEl.MCP.Decompiler.csproj" />
   </ItemGroup>
 
 </Project>
