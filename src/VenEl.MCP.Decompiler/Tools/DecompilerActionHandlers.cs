@@ -96,3 +96,63 @@ public class GetMetadataActionHandler : IActionHandler<DecompilerCommandArgs>
         return JsonSerializer.Serialize(meta, new JsonSerializerOptions { WriteIndented = true });
     }
 }
+
+public class ExportProjectActionHandler : IActionHandler<DecompilerCommandArgs>
+{
+    private readonly IDecompilerService _decompilerService;
+
+    public ExportProjectActionHandler(IDecompilerService decompilerService)
+    {
+        _decompilerService = decompilerService;
+    }
+
+    public string ActionName => "export_project";
+
+    public string? Validate(DecompilerCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.Path))
+            return "Path is required.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(DecompilerCommandArgs args, CancellationToken ct)
+    {
+        var result = await _decompilerService.ExportProjectAsync(args.Path!, args.DestinationDir, ct);
+        return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+    }
+}
+
+public class DisassembleILActionHandler : IActionHandler<DecompilerCommandArgs>
+{
+    private readonly IDecompilerService _decompilerService;
+
+    public DisassembleILActionHandler(IDecompilerService decompilerService)
+    {
+        _decompilerService = decompilerService;
+    }
+
+    public string ActionName => "disassemble_il";
+
+    public string? Validate(DecompilerCommandArgs args)
+    {
+        if (string.IsNullOrWhiteSpace(args.Path))
+            return "Path is required.";
+        return null;
+    }
+
+    public async Task<string> HandleAsync(DecompilerCommandArgs args, CancellationToken ct)
+    {
+        var result = await _decompilerService.DecompileAsync(args.Path!, ct);
+        var ilResult = new
+        {
+            result.Path,
+            result.FileName,
+            result.Format,
+            result.Architecture,
+            IntermediateLanguage = result.IntermediateLanguageCode ?? "// No IL/bytecode disassembly available.",
+            result.IsSuccess,
+            result.ErrorMessage
+        };
+        return JsonSerializer.Serialize(ilResult, new JsonSerializerOptions { WriteIndented = true });
+    }
+}

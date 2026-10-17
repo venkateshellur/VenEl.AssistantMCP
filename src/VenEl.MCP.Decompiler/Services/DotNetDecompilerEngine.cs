@@ -9,6 +9,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
+using ICSharpCode.Decompiler.CSharp.ProjectDecompiler;
+using ICSharpCode.Decompiler.Disassembler;
 using ICSharpCode.Decompiler.Metadata;
 using ICSharpCode.Decompiler.TypeSystem;
 using VenEl.MCP.Decompiler.Models;
@@ -188,6 +190,25 @@ public static class DotNetDecompilerEngine
                     result.DecompiledCode = $"// Decompilation notice: Full assembly view limited: {ex.Message}\n// Outline and type definitions were successfully extracted above.";
                 }
 
+                // Disassemble Intermediate Language (MSIL / CIL)
+                try
+                {
+                    var ilOutput = new PlainTextOutput();
+                    var rd = new ReflectionDisassembler(ilOutput, ct);
+                    using var peStream = File.OpenRead(filePath);
+                    using var peR = new PEReader(peStream);
+                    var peFile = new PEFile(filePath, peR);
+                    rd.WriteAssemblyHeader(peFile);
+                    rd.WriteModuleContents(peFile);
+                    result.IntermediateLanguageCode = ilOutput.ToString();
+                }
+                catch (Exception ex)
+                {
+                    result.IntermediateLanguageCode = $"// IL Disassembly notice: {ex.Message}";
+                }
+
+                result.CanExportProject = true;
+
                 // Generate Deterministic Summary
                 var tfSummary = !string.IsNullOrEmpty(result.TargetFramework) ? result.TargetFramework : "Managed .NET";
                 var depSummary = result.Dependencies.Count > 0 
@@ -202,6 +223,68 @@ public static class DotNetDecompilerEngine
             {
                 result.IsSuccess = false;
                 result.ErrorMessage = $"Decompilation error: {ex.Message}";
+            }
+
+            return result;
+        }, ct);
+    }
+
+    public static Task<ExportProjectResult> ExportProjectAsync(string filePath, string? destinationDir = null, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            var result = new ExportProjectResult();
+            try
+            {
+                if (!File.Exists(filePath))
+                {
+                    result.IsSuccess = false;
+                    result.ErrorMessage = $"File not found: {filePath}";
+                    return result;
+                }
+
+                var fileNameWithoutExt = Path.GetFileNameWithoutExtension(filePath);
+                var parentDir = Path.GetDirectoryName(filePath) ?? Directory.GetCurrentDirectory();
+                var targetDir = !string.IsNullOrWhiteSpace(destinationDir)
+                    ? destinationDir
+                    : Path.Combine(parentDir, $"{fileNameWithoutExt}_Decompiled");
+
+                if (!Directory.Exists(targetDir))
+                {
+                    Directory.CreateDirectory(targetDir);
+                }
+
+                using var peStream = File.OpenRead(filePath);
+                using var peR = new PEReader(peStream);
+                var peFile = new PEFile(filePath, peR);
+                var targetFramework = peFile.DetectTargetFrameworkId();
+                var resolver = new UniversalAssemblyResolver(filePath, false, targetFramework);
+                resolver.AddSearchDirectory(parentDir);
+
+                var decompiler = new WholeProjectDecompiler(resolver);
+                decompiler.Settings.ThrowOnAssemblyResolveErrors = false;
+                decompiler.DecompileProject(peFile, targetDir);
+
+                var csprojFiles = Directory.GetFiles(targetDir, "*.csproj", SearchOption.AllDirectories);
+                var allFiles = Directory.GetFiles(targetDir, "*.*", SearchOption.AllDirectories);
+
+                result.IsSuccess = true;
+                result.ProjectDirectory = targetDir;
+                result.ProjectFilePath = csprojFiles.FirstOrDefault();
+                result.FilesWritten = allFiles.Length;
+                result.GeneratedFiles = allFiles
+                    .Select(f => Path.GetRelativePath(targetDir, f))
+                    .OrderBy(f => f)
+                    .Take(100)
+                    .ToList();
+
+                var projName = result.ProjectFilePath != null ? Path.GetFileName(result.ProjectFilePath) : $"{fileNameWithoutExt}.csproj";
+                result.Summary = $"Reconstructed C# project for {Path.GetFileName(filePath)} in '{targetDir}'. Generated {allFiles.Length} file(s) including {projName}.";
+            }
+            catch (Exception ex)
+            {
+                result.IsSuccess = false;
+                result.ErrorMessage = $"Project export failed: {ex.Message}";
             }
 
             return result;

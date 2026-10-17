@@ -25,6 +25,7 @@ public record BatchRenameItem(string OldName, string NewName);
 public record BatchRenameRequest(string CurrentPath, List<BatchRenameItem> Renames);
 public record CompressRequest(string? CurrentPath, string? Folder, List<string>? Items, string? ArchiveName);
 public record ExtractRequest(string? ArchivePath, string? DestinationDir, string? Folder, string? ArchiveName, string? DestinationFolder);
+public record ExportProjectRequest(string Path, string? DestinationDir);
 
 public static class FileManagerWebApp
 {
@@ -654,6 +655,41 @@ public static class FileManagerWebApp
 
                 var decompiler = new VenEl.MCP.Decompiler.Services.DecompilerService();
                 var result = await decompiler.DecompileAsync(path, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { isSuccess = false, errorMessage = ex.Message });
+            }
+        });
+
+        // 11h. Export Reconstructed Project from Binary (.NET, Java, WASM, Native)
+        _app.MapPost("/api/files/decompile/export", async (ExportProjectRequest req, CancellationToken ct) =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(req.Path))
+                    return Results.BadRequest(new { isSuccess = false, errorMessage = "Path parameter is required." });
+
+                var decompiler = new VenEl.MCP.Decompiler.Services.DecompilerService();
+                var result = await decompiler.ExportProjectAsync(req.Path, req.DestinationDir, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { isSuccess = false, errorMessage = ex.Message });
+            }
+        });
+
+        _app.MapGet("/api/files/decompile/export", async (string path, string? destinationDir, CancellationToken ct) =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                    return Results.BadRequest(new { isSuccess = false, errorMessage = "Path parameter is required." });
+
+                var decompiler = new VenEl.MCP.Decompiler.Services.DecompilerService();
+                var result = await decompiler.ExportProjectAsync(path, destinationDir, ct);
                 return Results.Ok(result);
             }
             catch (Exception ex)
@@ -1640,16 +1676,19 @@ public static class FileManagerWebApp
         .preview-pane {
             width: 320px;
             min-width: 180px;
-            max-width: 700px;
+            max-width: 900px;
             background: var(--panel-bg);
             border-left: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             padding: 16px;
             overflow-y: auto;
-            transition: width 0.2s, opacity 0.2s;
+            transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
             box-sizing: border-box;
             flex-shrink: 0;
+        }
+        .preview-pane.split-active {
+            width: 640px !important;
         }
         .preview-pane.collapsed {
             width: 0 !important;
@@ -2156,6 +2195,12 @@ public static class FileManagerWebApp
             border-bottom: 1px solid var(--border-color);
             padding-bottom: 6px;
             margin-top: 4px;
+            overflow-x: auto;
+            white-space: nowrap;
+            scrollbar-width: none;
+        }
+        .decompile-tab-bar::-webkit-scrollbar {
+            display: none;
         }
         .decompile-tab-btn {
             background: transparent;
@@ -2163,9 +2208,11 @@ public static class FileManagerWebApp
             color: var(--text-muted);
             font-size: 11px;
             font-weight: 500;
-            padding: 4px 10px;
+            padding: 4px 8px;
             border-radius: 4px;
             cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
             transition: all 0.15s ease;
         }
         .decompile-tab-btn:hover {
@@ -2212,6 +2259,461 @@ public static class FileManagerWebApp
             max-height: 420px;
             overflow: auto;
             white-space: pre-wrap;
+        }
+
+        /* ◫ DECOMPILER SPLIT VIEW STYLES */
+        .decompile-split-container {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 8px;
+        }
+        .decompile-split-pane {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .decompile-split-header {
+            font-size: 11px;
+            font-weight: 600;
+            color: #a29bfe;
+            padding: 6px 10px;
+            background: rgba(108, 92, 231, 0.15);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .decompile-split-pre {
+            border-radius: 0 0 6px 6px !important;
+            margin: 0 !important;
+        }
+        .decompile-split-btn {
+            margin-left: auto;
+            border: 1px dashed rgba(162, 155, 254, 0.4);
+        }
+        .decompile-split-btn.active {
+            background: #6c5ce7 !important;
+            color: #fff !important;
+            border-style: solid !important;
+            border-color: #6c5ce7 !important;
+        }
+
+        /* ══════════════════════════════════════════════════════════ */
+        /* 🔍 DECOMPILER OUTLINE FILTER & SYMBOL JUMP STYLES          */
+        /* ══════════════════════════════════════════════════════════ */
+        .decompile-filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(18, 18, 24, 0.85);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+            padding: 8px 10px;
+            box-sizing: border-box;
+            flex-wrap: wrap;
+        }
+        .decompile-search-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+            flex: 1;
+            min-width: 180px;
+        }
+        .decompile-search-icon {
+            position: absolute;
+            left: 9px;
+            font-size: 11px;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .decompile-search-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 6px;
+            padding: 5px 26px 5px 28px;
+            font-size: 11px;
+            color: #fff;
+            outline: none;
+            transition: all 0.15s ease;
+            box-sizing: border-box;
+        }
+        .decompile-search-input:focus {
+            border-color: #6c5ce7;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.25);
+        }
+        .decompile-search-clear {
+            position: absolute;
+            right: 7px;
+            background: transparent;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 11px;
+            display: none;
+            padding: 2px;
+        }
+        .decompile-search-clear:hover {
+            color: #fff;
+        }
+        .decompile-filter-badges {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .decompile-kind-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+            border-radius: 4px;
+            padding: 3px 7px;
+            font-size: 10px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .decompile-kind-btn:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .decompile-kind-btn.active {
+            background: #6c5ce7;
+            border-color: #6c5ce7;
+            color: #fff;
+            font-weight: 600;
+        }
+        .decompile-match-count {
+            font-size: 10px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .symbol-match {
+            background: rgba(255, 234, 167, 0.35);
+            color: #ffeaa7;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+        .decompile-line-flash {
+            animation: decompileLineFlash 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes decompileLineFlash {
+            0% { background-color: rgba(108, 92, 231, 0.6); }
+            100% { background-color: transparent; }
+        }
+
+        /* ══════════════════════════════════════════════════════════ */
+        /* ⚖️ VISUAL DIFF & COMPARISON MODAL STYLES                   */
+        /* ══════════════════════════════════════════════════════════ */
+        .diff-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(10px);
+            z-index: 9500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+        .diff-modal.active {
+            display: flex;
+        }
+        .diff-card {
+            width: 95vw;
+            max-width: 1300px;
+            height: 90vh;
+            max-height: 900px;
+            background: #14141a;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .diff-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 18px;
+            background: #0f0f14;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            flex-shrink: 0;
+        }
+        .diff-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .diff-title {
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #fff;
+        }
+        .diff-file-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #dfe6e9;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .diff-badge-add {
+            background: rgba(46, 204, 113, 0.18);
+            color: #2ecc71;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .diff-badge-del {
+            background: rgba(235, 77, 75, 0.18);
+            color: #eb4d4b;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .diff-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 18px;
+            background: rgba(0, 0, 0, 0.25);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            flex-shrink: 0;
+            gap: 12px;
+        }
+        .diff-mode-toggle {
+            display: flex;
+            gap: 2px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 2px;
+        }
+        .diff-mode-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .diff-mode-btn.active {
+            background: #6c5ce7;
+            color: #fff;
+            font-weight: 600;
+        }
+        .diff-body-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            background: #111116;
+            position: relative;
+        }
+        .diff-split-view {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+        .diff-pane {
+            flex: 1;
+            overflow: auto;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            background: #111116;
+        }
+        .diff-pane:first-child {
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .diff-pane-header {
+            position: sticky;
+            top: 0;
+            background: #16161e;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #a29bfe;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .diff-line-row {
+            display: flex;
+            min-width: 100%;
+            width: max-content;
+            padding: 0 4px;
+            user-select: text;
+        }
+        .diff-line-row.added {
+            background: rgba(46, 204, 113, 0.14);
+            border-left: 3px solid #2ecc71;
+        }
+        .diff-line-row.removed {
+            background: rgba(235, 77, 75, 0.14);
+            border-left: 3px solid #eb4d4b;
+        }
+        .diff-line-row.empty {
+            background: rgba(255, 255, 255, 0.015);
+        }
+        .diff-num-col {
+            width: 38px;
+            min-width: 38px;
+            text-align: right;
+            padding-right: 8px;
+            color: #4b4b58;
+            user-select: none;
+            font-size: 10px;
+        }
+        .diff-text-col {
+            white-space: pre;
+            tab-size: 4;
+            flex: 1;
+            color: #dfe6e9;
+            padding-left: 6px;
+        }
+        .diff-line-row.added .diff-text-col {
+            color: #a8e6cf;
+        }
+        .diff-line-row.removed .diff-text-col {
+            color: #ff8b8b;
+        }
+
+        /* ══════════════════════════════════════════════════════════ */
+        /* 🖱️ DRAG & DROP STYLES                                      */
+        /* ══════════════════════════════════════════════════════════ */
+        .item.dragging {
+            opacity: 0.45;
+            transform: scale(0.97);
+            filter: grayscale(0.6);
+            border: 1px dashed #6c5ce7 !important;
+        }
+        .item.drag-over {
+            border: 2px dashed #6c5ce7 !important;
+            background: rgba(108, 92, 231, 0.25) !important;
+            box-shadow: 0 0 16px rgba(108, 92, 231, 0.4) !important;
+            transform: scale(1.02);
+        }
+        .sidebar-item.drag-over {
+            background: rgba(108, 92, 231, 0.3) !important;
+            border-left: 3px solid #6c5ce7 !important;
+        }
+        .breadcrumb-segment.drag-over {
+            background: rgba(108, 92, 231, 0.35) !important;
+            border-radius: 4px;
+        }
+        #dropOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(13, 13, 18, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 7000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        #dropOverlay.active {
+            display: flex;
+        }
+        .drop-overlay-box {
+            border: 2px dashed #6c5ce7;
+            border-radius: 16px;
+            padding: 36px 54px;
+            text-align: center;
+            background: rgba(108, 92, 231, 0.1);
+            animation: pulseGlow 1.5s infinite alternate;
+        }
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 15px rgba(108, 92, 231, 0.3); }
+            100% { box-shadow: 0 0 35px rgba(108, 92, 231, 0.7); }
+        }
+
+        /* ══════════════════════════════════════════════════════════ */
+        /* ⌨️ TYPE-TO-SELECT / INCREMENTAL QUICK SEARCH HUD          */
+        /* ══════════════════════════════════════════════════════════ */
+        .type-ahead-badge {
+            position: fixed;
+            bottom: 38px;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            display: flex;
+            visibility: hidden;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 18px;
+            background: rgba(20, 20, 28, 0.94);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(108, 92, 231, 0.45);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 16px rgba(108, 92, 231, 0.25);
+            border-radius: 20px;
+            z-index: 6000;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            pointer-events: none;
+            transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+            opacity: 0;
+        }
+        .type-ahead-badge.visible {
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        .type-ahead-badge.no-match {
+            border-color: rgba(235, 77, 75, 0.65);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 16px rgba(235, 77, 75, 0.25);
+        }
+        .type-ahead-badge .type-ahead-icon {
+            font-size: 13px;
+        }
+        .type-ahead-badge .type-ahead-text {
+            color: #a29bfe;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .type-ahead-badge.no-match .type-ahead-text {
+            color: #ff8b8b;
+        }
+        .type-ahead-badge .type-ahead-count {
+            font-size: 11px;
+            color: var(--text-muted);
+            padding-left: 2px;
         }
 
         /* ══════════════════════════════════════════════════════════ */
@@ -3323,6 +3825,9 @@ public static class FileManagerWebApp
             <button class="tool-btn" id="btn-unzip-archive" onclick="handleExtractSelected(false)" style="display: none;" title="Extract Archive">
                 <i>📦</i> Unzip
             </button>
+            <button class="tool-btn" id="btn-diff-compare" onclick="diffSelectedPair()" style="display: none;" title="Compare 2 Selected Files (Diff)">
+                <i>⚖️</i> Compare
+            </button>
             <div class="toolbar-divider"></div>
             <button class="tool-btn" id="btn-terminal" onclick="openTerminalAtCurrent()" title="Open in Terminal">
                 <i>💻</i> Terminal
@@ -3458,6 +3963,9 @@ public static class FileManagerWebApp
         </div>
         <div class="context-item" id="ctx-diff" onclick="diffSelectedItemWithHead()" style="display: none;">
             <i>⚖️</i> <span>Compare with HEAD (Diff)</span>
+        </div>
+        <div class="context-item" id="ctx-compare-two" onclick="diffSelectedPair()" style="display: none;">
+            <i>⚖️</i> <span>Compare Selected Files (Diff)</span>
         </div>
         <div class="context-item" id="ctx-quicklook" onclick="toggleQuickLook()">
             <i>👁️</i> <span>Quick Look</span> <span class="shortcut">Space</span>
@@ -3760,7 +4268,8 @@ public static class FileManagerWebApp
                             <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>W</kbd></td><td>Close active tab</td></tr>
                             <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>Tab</kbd></td><td>Cycle forward / backward between open tabs</td></tr>
                             <tr><td><kbd>Alt</kbd> + <kbd>1</kbd> .. <kbd>9</kbd></td><td>Jump directly to Tab 1 through 9</td></tr>
-                            <tr><td><kbd>/</kbd></td><td>Focus <strong>Instant Live Filter</strong> for current folder</td></tr>
+                            <tr><td><kbd>Type A-Z</kbd></td><td><strong>Type-to-Select</strong>: Quick jump to matching file/folder (repeating cycles matches)</td></tr>
+                            <tr><td><kbd>↑</kbd> / <kbd>↓</kbd> / <kbd>Home</kbd> / <kbd>End</kbd></td><td>Navigate items (Hold <kbd>Shift</kbd> to extend range selection)</td></tr>
                             <tr><td><kbd>Spacebar</kbd></td><td>Toggle <strong>Quick Look</strong> popup preview (Finder style)</td></tr>
                             <tr><td><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd></td><td>Navigate History Back / Forward</td></tr>
                             <tr><td><kbd>Alt</kbd> + <kbd>↑</kbd></td><td>Navigate up one level to Parent Folder</td></tr>
@@ -4050,14 +4559,64 @@ public static class FileManagerWebApp
                 <button type="button" class="modal-btn confirm" id="btn-confirm-compress" onclick="submitCompress()">Compress</button>
             </div>
         </div>
+    <!-- ⚖️ Visual File Diff & Comparison Modal -->
+    <div class="diff-modal" id="modal-diff" onclick="closeVisualDiff(event)">
+        <div class="diff-card" onclick="event.stopPropagation()">
+            <div class="diff-header">
+                <div class="diff-header-left">
+                    <span class="diff-title"><i>⚖️</i> Visual File Diff</span>
+                    <span class="diff-file-tag" id="diff-tag-a">File A</span>
+                    <span style="color: var(--text-muted); font-size: 11px;">↔</span>
+                    <span class="diff-file-tag" id="diff-tag-b">File B</span>
+                    <div class="diff-stats" id="diff-stats-box" style="display: none;">
+                        <span class="diff-badge-add" id="diff-stat-add">+0</span>
+                        <span class="diff-badge-del" id="diff-stat-del">-0</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="modal-btn" style="font-size: 11px; padding: 4px 10px;" id="diff-btn-vscode" onclick="openDiffInVsCode()">🚀 Open in VS Code Diff</button>
+                    <button onclick="closeVisualDiff()" style="background: none; border: none; color: #888; cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 4px;">✕</button>
+                </div>
+            </div>
+            <div class="diff-toolbar">
+                <div class="diff-mode-toggle">
+                    <button class="diff-mode-btn active" id="diff-btn-split" onclick="setDiffMode('split')">Split View</button>
+                    <button class="diff-mode-btn" id="diff-btn-unified" onclick="setDiffMode('unified')">Unified View</button>
+                </div>
+                <div id="diff-info-msg" style="font-size: 11px; color: var(--text-muted);"></div>
+            </div>
+            <div class="diff-body-container" id="diff-body-container">
+                <!-- Content dynamically populated by renderDiffView() -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 📂 Full-Panel Drag & Drop File Upload Overlay -->
+    <div id="dropOverlay">
+        <div class="drop-overlay-box">
+            <div style="font-size: 42px; margin-bottom: 12px;">📂</div>
+            <div style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px;">Drop Files to Add to Folder</div>
+            <div style="font-size: 12px; color: #a29bfe;" id="dropOverlayTargetName">Active Directory</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">Supports text files, scripts, images, documents & binaries</div>
+        </div>
+    </div>
+
+    <!-- ⌨️ Type-to-Select / Incremental Quick Search Floating HUD -->
+    <div id="type-ahead-badge" class="type-ahead-badge">
+        <span class="type-ahead-icon">🔎</span>
+        <span class="type-ahead-text" id="type-ahead-query"></span>
+        <span class="type-ahead-count" id="type-ahead-count"></span>
     </div>
 
     <script>
         let currentPath = '.';
         let currentItems = [];
+        let displayedItems = [];
         let selectedItem = null;
         let selectedItems = [];
         let lastSelectedName = null;
+        let typeAheadBuffer = '';
+        let typeAheadTimer = null;
         let activeBatchTab = 'replace';
         let batchGeneratedNames = [];
         let selectedPropPath = '';
@@ -4514,7 +5073,7 @@ public static class FileManagerWebApp
 
             const rootPath = isWindows ? (currentPath.slice(0, 3)) : '/';
             const rootLabel = isWindows ? rootPath : '/ (Root)';
-            html += '<span class="crumb' + (parts.length === 0 ? ' current' : '') + '" onclick="event.stopPropagation(); navigateTo(\'' + escapePath(rootPath) + '\')">' +
+            html += '<span class="crumb' + (parts.length === 0 ? ' current' : '') + '" onclick="event.stopPropagation(); navigateTo(\'' + escapePath(rootPath) + '\')" ondragover="handleBreadcrumbDragOver(event, \'' + escapePath(rootPath) + '\')" ondragleave="handleBreadcrumbDragLeave(event)" ondrop="handleBreadcrumbDrop(event, \'' + escapePath(rootPath) + '\')">' +
                     '<i>' + (isWindows ? '💻' : '📁') + '</i> ' + escapeHtml(rootLabel) + '</span>';
 
             let accum = isWindows ? rootPath : '';
@@ -4523,7 +5082,7 @@ public static class FileManagerWebApp
                 accum = isWindows ? (accum.endsWith('\\') ? accum + parts[i] : accum + '\\' + parts[i]) : accum + '/' + parts[i];
                 const isCurrent = (i === parts.length - 1);
                 html += '<span class="crumb-sep">›</span>';
-                html += '<span class="crumb' + (isCurrent ? ' current' : '') + '" onclick="event.stopPropagation(); navigateTo(\'' + escapePath(accum) + '\')">' +
+                html += '<span class="crumb' + (isCurrent ? ' current' : '') + '" onclick="event.stopPropagation(); navigateTo(\'' + escapePath(accum) + '\')" ondragover="handleBreadcrumbDragOver(event, \'' + escapePath(accum) + '\')" ondragleave="handleBreadcrumbDragLeave(event)" ondrop="handleBreadcrumbDrop(event, \'' + escapePath(accum) + '\')">' +
                         escapeHtml(parts[i]) + '</span>';
             }
             container.innerHTML = html;
@@ -5063,6 +5622,8 @@ public static class FileManagerWebApp
         }
 
         function renderItems(items) {
+            displayedItems = items || [];
+            clearTypeAhead();
             let html = '';
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
@@ -5095,7 +5656,13 @@ public static class FileManagerWebApp
                     gitBadgeHtml = '<span class="git-badge ' + badgeClass + '" title="' + title + '">' + (code === '?' ? 'U' : code) + '</span>';
                 }
 
+                let dragAttr = 'draggable="true" ondragstart="handleItemDragStart(event, \'' + escapePath(item.name) + '\', ' + isDir + ')" ondragend="handleItemDragEnd(event)"';
+                if (isDir) {
+                    dragAttr += ' ondragover="handleFolderDragOver(event, \'' + escapePath(item.name) + '\')" ondragleave="handleFolderDragLeave(event)" ondrop="handleFolderDrop(event, \'' + escapePath(item.name) + '\')"';
+                }
+
                 html += '<div class="item ' + className + (isSelected ? ' selected' : '') + (isCut ? ' cut-item' : '') + '" ' +
+                        dragAttr + ' ' +
                         'data-name="' + escapeHtml(item.name) + '" ' +
                         'onclick="handleItemClick(event, \'' + escapePath(item.name) + '\', ' + isDir + ')" ' +
                         'onauxclick="handleItemAuxClick(event, \'' + escapePath(item.name) + '\', ' + isDir + ')" ' +
@@ -5320,6 +5887,9 @@ public static class FileManagerWebApp
             const btnUnzip = document.getElementById('btn-unzip-archive');
             if (btnUnzip) btnUnzip.style.display = isArchive ? 'inline-flex' : 'none';
 
+            const btnDiffCompare = document.getElementById('btn-diff-compare');
+            if (btnDiffCompare) btnDiffCompare.style.display = count === 2 ? 'inline-flex' : 'none';
+
             const selectedInfo = document.getElementById('status-selected-info');
             if (count === 1 && selectedItem) {
                 selectedInfo.innerText = 'Selected: ' + selectedItem.name + (selectedItem.type === 'File' ? ' (' + formatBytes(selectedItem.size) + ')' : '');
@@ -5347,6 +5917,211 @@ public static class FileManagerWebApp
             } else {
                 openSelectedItemInEditor(nextPath);
             }
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // ⌨️ TYPE-TO-SELECT / INCREMENTAL SEARCH & KEYBOARD NAV
+        // ══════════════════════════════════════════════════════════
+        function getVisibleItems() {
+            return (displayedItems && displayedItems.length > 0) ? displayedItems : (currentItems || []);
+        }
+
+        function findItemElementByName(name) {
+            const items = document.querySelectorAll('#files .item');
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].getAttribute('data-name') === name) {
+                    return items[i];
+                }
+            }
+            return null;
+        }
+
+        function selectAndScrollToItem(item) {
+            if (!item) return;
+            selectedItems = [item];
+            selectedItem = item;
+            lastSelectedName = item.name;
+            syncItemSelectionDOM();
+            updateSelectionState();
+            handlePreview(item.name, item.type === 'Directory');
+
+            const el = findItemElementByName(item.name);
+            if (el) {
+                el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+            }
+        }
+
+        function showTypeAheadBadge(query, currentMatchIdx, totalMatches) {
+            const badge = document.getElementById('type-ahead-badge');
+            const queryEl = document.getElementById('type-ahead-query');
+            const countEl = document.getElementById('type-ahead-count');
+            if (!badge || !queryEl || !countEl) return;
+
+            queryEl.textContent = query;
+            if (totalMatches > 0) {
+                badge.classList.remove('no-match');
+                countEl.textContent = '(' + (currentMatchIdx + 1) + '/' + totalMatches + ')';
+            } else {
+                badge.classList.add('no-match');
+                countEl.textContent = '(no matches)';
+            }
+            badge.classList.add('visible');
+        }
+
+        function hideTypeAheadBadge() {
+            const badge = document.getElementById('type-ahead-badge');
+            if (badge) {
+                badge.classList.remove('visible');
+            }
+        }
+
+        function clearTypeAhead() {
+            typeAheadBuffer = '';
+            if (typeAheadTimer) {
+                clearTimeout(typeAheadTimer);
+                typeAheadTimer = null;
+            }
+            hideTypeAheadBadge();
+        }
+
+        function handleTypeAhead(char) {
+            const items = getVisibleItems();
+            if (!items || items.length === 0) return;
+
+            const lowerChar = char.toLowerCase();
+            const isSingleCharCycle = (typeAheadBuffer.length === 1 && typeAheadBuffer.toLowerCase() === lowerChar);
+
+            if (isSingleCharCycle) {
+                // Repeating the same single character cycles through all matches starting with that letter
+                const matches = items.filter(function(i) {
+                    return i.name && i.name.toLowerCase().startsWith(lowerChar);
+                });
+
+                if (matches.length > 0) {
+                    let currentIdx = -1;
+                    if (selectedItem) {
+                        currentIdx = matches.findIndex(function(m) { return m.name === selectedItem.name; });
+                    }
+                    const nextIdx = (currentIdx + 1) % matches.length;
+                    selectAndScrollToItem(matches[nextIdx]);
+                    showTypeAheadBadge(typeAheadBuffer, nextIdx, matches.length);
+                } else {
+                    showTypeAheadBadge(typeAheadBuffer, 0, 0);
+                }
+            } else {
+                // Appending character to incremental search buffer
+                typeAheadBuffer += char;
+                const q = typeAheadBuffer.toLowerCase();
+
+                // 1. Prefix matches first (standard OS Explorer / Finder behavior)
+                let matches = items.filter(function(i) {
+                    return i.name && i.name.toLowerCase().startsWith(q);
+                });
+
+                // 2. Fallback to contains matches if no prefix matches
+                if (matches.length === 0) {
+                    matches = items.filter(function(i) {
+                        return i.name && i.name.toLowerCase().includes(q);
+                    });
+                }
+
+                if (matches.length > 0) {
+                    selectAndScrollToItem(matches[0]);
+                    showTypeAheadBadge(typeAheadBuffer, 0, matches.length);
+                } else {
+                    showTypeAheadBadge(typeAheadBuffer, 0, 0);
+                }
+            }
+
+            if (typeAheadTimer) clearTimeout(typeAheadTimer);
+            typeAheadTimer = setTimeout(function() {
+                clearTypeAhead();
+            }, 1100);
+        }
+
+        function handleTypeAheadBackspace() {
+            if (!typeAheadBuffer || typeAheadBuffer.length === 0) return false;
+            typeAheadBuffer = typeAheadBuffer.slice(0, -1);
+            if (typeAheadBuffer.length === 0) {
+                clearTypeAhead();
+                return true;
+            }
+
+            const items = getVisibleItems();
+            const q = typeAheadBuffer.toLowerCase();
+            let matches = items.filter(function(i) {
+                return i.name && i.name.toLowerCase().startsWith(q);
+            });
+            if (matches.length === 0) {
+                matches = items.filter(function(i) {
+                    return i.name && i.name.toLowerCase().includes(q);
+                });
+            }
+
+            if (matches.length > 0) {
+                selectAndScrollToItem(matches[0]);
+                showTypeAheadBadge(typeAheadBuffer, 0, matches.length);
+            } else {
+                showTypeAheadBadge(typeAheadBuffer, 0, 0);
+            }
+
+            if (typeAheadTimer) clearTimeout(typeAheadTimer);
+            typeAheadTimer = setTimeout(function() {
+                clearTypeAhead();
+            }, 1100);
+            return true;
+        }
+
+        function navigateSelection(delta, isShift) {
+            const items = getVisibleItems();
+            if (!items || items.length === 0) return;
+
+            clearTypeAhead();
+
+            let curIdx = -1;
+            if (selectedItem) {
+                curIdx = items.findIndex(function(i) { return i.name === selectedItem.name; });
+            }
+
+            let nextIdx;
+            if (delta === 'first') {
+                nextIdx = 0;
+            } else if (delta === 'last') {
+                nextIdx = items.length - 1;
+            } else {
+                if (curIdx === -1) {
+                    nextIdx = delta > 0 ? 0 : items.length - 1;
+                } else {
+                    nextIdx = curIdx + delta;
+                    if (nextIdx < 0) nextIdx = 0;
+                    if (nextIdx >= items.length) nextIdx = items.length - 1;
+                }
+            }
+
+            const target = items[nextIdx];
+            if (!target) return;
+
+            if (isShift && lastSelectedName) {
+                const fromIdx = items.findIndex(function(i) { return i.name === lastSelectedName; });
+                if (fromIdx !== -1) {
+                    const start = Math.min(fromIdx, nextIdx);
+                    const end = Math.max(fromIdx, nextIdx);
+                    selectedItems = items.slice(start, end + 1);
+                    selectedItem = target;
+                    syncItemSelectionDOM();
+                    updateSelectionState();
+                    if (selectedItems.length === 1) {
+                        handlePreview(selectedItem.name, selectedItem.type === 'Directory');
+                    } else {
+                        renderMultiSelectionPreview();
+                    }
+                    const el = findItemElementByName(target.name);
+                    if (el) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                    return;
+                }
+            }
+
+            selectAndScrollToItem(target);
         }
 
         // ══════════════════════════════════════════════════════════
@@ -5489,7 +6264,9 @@ public static class FileManagerWebApp
                     return;
                 }
 
-                const icon = ext === 'class' || ext === 'jar' || ext === 'war' ? '☕' : '⚡';
+                const icon = ext === 'class' || ext === 'jar' || ext === 'war' ? '☕' : 
+                             ext === 'wasm' ? '🕸️' : 
+                             (ext === 'dylib' || ext === 'so' ? '⚙️' : '⚡');
                 const formatLabel = data.format || (ext.toUpperCase() + ' Binary');
                 const targetFw = data.targetFramework ? ' • ' + escapeHtml(data.targetFramework) : '';
                 const arch = data.architecture ? ' • ' + escapeHtml(data.architecture) : '';
@@ -5511,8 +6288,9 @@ public static class FileManagerWebApp
                     outlineHtml = '<div style="padding: 12px; color: var(--text-muted); font-size: 11px;">No type metadata available.</div>';
                 }
 
-                // Decompiled Code snippet
+                // Decompiled Code snippet & IL snippet
                 const codeSnippet = data.decompiledCode || '// No decompiled source available.';
+                const ilSnippet = data.intermediateLanguageCode || '// No IL / bytecode disassembly available.';
 
                 targetElem.innerHTML = '<div class="decompile-container" id="' + uniqueId + '">' +
                     // Header Card
@@ -5526,21 +6304,49 @@ public static class FileManagerWebApp
                         '<div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">' +
                             '<button class="modal-btn" style="font-size: 11px; padding: 4px 8px;" onclick="copyDecompileSummary(\'' + uniqueId + '\')">✨ Copy AI Prompt</button>' +
                             '<button class="modal-btn" style="font-size: 11px; padding: 4px 8px;" onclick="copyDecompiledCode(\'' + uniqueId + '\')">📋 Copy Source</button>' +
+                            '<button class="modal-btn" style="font-size: 11px; padding: 4px 8px;" onclick="copyDecompiledIL(\'' + uniqueId + '\')">⚡ Copy IL</button>' +
+                            '<button class="modal-btn" style="font-size: 11px; padding: 4px 8px; background: rgba(108, 92, 231, 0.25); border-color: #6c5ce7; color: #a29bfe;" onclick="showExportProjectModal(\'' + uniqueId + '\', \'' + escapePath(fullPath) + '\')">📦 Export Project</button>' +
                             '<button class="modal-btn" style="font-size: 11px; padding: 4px 8px;" onclick="openSelectedItemInEditor(\'' + escapePath(fullPath) + '\')">🚀 Open File</button>' +
                         '</div>' +
                     '</div>' +
                     // Tabs
                     '<div class="decompile-tab-bar">' +
-                        '<button class="decompile-tab-btn active" data-tab="outline" onclick="switchDecompileTab(\'' + uniqueId + '\', \'outline\')">📋 Types & Members (' + (data.outline ? data.outline.length : 0) + ')</button>' +
-                        '<button class="decompile-tab-btn" data-tab="code" onclick="switchDecompileTab(\'' + uniqueId + '\', \'code\')">💻 Decompiled Source</button>' +
+                        '<button class="decompile-tab-btn active" data-tab="outline" onclick="switchDecompileTab(\'' + uniqueId + '\', \'outline\')">📋 Outline (' + (data.outline ? data.outline.length : 0) + ')</button>' +
+                        '<button class="decompile-tab-btn" data-tab="code" onclick="switchDecompileTab(\'' + uniqueId + '\', \'code\')" title="Decompiled High-Level Source Code">💻 Source</button>' +
+                        '<button class="decompile-tab-btn" data-tab="il" onclick="switchDecompileTab(\'' + uniqueId + '\', \'il\')" title="Raw Low-Level IL / Bytecode Disassembly">⚡ Bytecode</button>' +
+                        '<button class="decompile-tab-btn decompile-split-btn" id="' + uniqueId + '_split_btn" onclick="toggleDecompileSplitView(\'' + uniqueId + '\')" title="Side-by-side Source & Bytecode view">◫ Split View</button>' +
                     '</div>' +
                     // Tab Content 1: Outline Tree
                     '<div class="decompile-tab-content" id="' + uniqueId + '_outline">' +
-                        '<div class="decompile-tree-view" style="max-height: ' + (isQuickLook ? '60vh' : '360px') + ';">' + outlineHtml + '</div>' +
+                        '<div class="decompile-filter-bar">' +
+                            '<input type="text" class="decompile-search-input" id="' + uniqueId + '_search" placeholder="🔍 Search types, methods, properties, exports..." oninput="filterDecompileOutline(\'' + uniqueId + '\')">' +
+                            '<button class="decompile-kind-btn active" data-kind="all" onclick="filterDecompileByKind(\'' + uniqueId + '\', \'all\')">All</button>' +
+                            '<button class="decompile-kind-btn" data-kind="type" onclick="filterDecompileByKind(\'' + uniqueId + '\', \'type\')">Types</button>' +
+                            '<button class="decompile-kind-btn" data-kind="method" onclick="filterDecompileByKind(\'' + uniqueId + '\', \'method\')">Methods</button>' +
+                            '<button class="decompile-kind-btn" data-kind="property" onclick="filterDecompileByKind(\'' + uniqueId + '\', \'property\')">Props</button>' +
+                        '</div>' +
+                        '<div class="decompile-tree-view" id="' + uniqueId + '_tree" style="max-height: ' + (isQuickLook ? '60vh' : '360px') + ';">' + outlineHtml + '</div>' +
                     '</div>' +
                     // Tab Content 2: Source Code Viewer
                     '<div class="decompile-tab-content" id="' + uniqueId + '_code" style="display: none;">' +
                         '<pre class="decompile-code-viewer" style="max-height: ' + (isQuickLook ? '60vh' : '380px') + ';"><code id="' + uniqueId + '_code_text">' + escapeHtml(codeSnippet) + '</code></pre>' +
+                    '</div>' +
+                    // Tab Content 3: IL / Bytecode Viewer
+                    '<div class="decompile-tab-content" id="' + uniqueId + '_il" style="display: none;">' +
+                        '<pre class="decompile-code-viewer" style="max-height: ' + (isQuickLook ? '60vh' : '380px') + ';"><code id="' + uniqueId + '_il_text">' + escapeHtml(ilSnippet) + '</code></pre>' +
+                    '</div>' +
+                    // Tab Content 4: Side-by-Side Split View
+                    '<div class="decompile-tab-content" id="' + uniqueId + '_split" style="display: none;">' +
+                        '<div class="decompile-split-container">' +
+                            '<div class="decompile-split-pane">' +
+                                '<div class="decompile-split-header"><span>💻 Source Code (' + escapeHtml(formatLabel) + ')</span><button class="modal-btn" style="font-size: 10px; padding: 2px 6px;" onclick="copyDecompiledCode(\'' + uniqueId + '\')">📋 Copy</button></div>' +
+                                '<pre class="decompile-code-viewer decompile-split-pre" id="' + uniqueId + '_split_left_pre" style="max-height: ' + (isQuickLook ? '55vh' : '380px') + ';"><code id="' + uniqueId + '_split_code">' + escapeHtml(codeSnippet) + '</code></pre>' +
+                            '</div>' +
+                            '<div class="decompile-split-pane">' +
+                                '<div class="decompile-split-header"><span>⚡ IL / Bytecode Disassembly</span><button class="modal-btn" style="font-size: 10px; padding: 2px 6px;" onclick="copyDecompiledIL(\'' + uniqueId + '\')">⚡ Copy</button></div>' +
+                                '<pre class="decompile-code-viewer decompile-split-pre" id="' + uniqueId + '_split_right_pre" style="max-height: ' + (isQuickLook ? '55vh' : '380px') + ';"><code id="' + uniqueId + '_split_il">' + escapeHtml(ilSnippet) + '</code></pre>' +
+                            '</div>' +
+                        '</div>' +
                     '</div>' +
                     '</div>';
 
@@ -5556,45 +6362,297 @@ public static class FileManagerWebApp
         function renderOutlineTree(nodes, uniqueId) {
             let html = '';
             for (const node of nodes) {
-                const kindIcon = node.kind === 'namespace' ? '📦' :
-                                 node.kind === 'class' ? '🔷' :
-                                 node.kind === 'interface' ? '🔶' :
-                                 node.kind === 'struct' ? '🧱' :
-                                 node.kind === 'enum' ? '🔢' :
-                                 node.kind === 'method' ? '⚡' :
-                                 node.kind === 'property' ? '🔧' :
-                                 node.kind === 'field' ? '🏷️' : '📄';
+                const kind = node.kind || '';
+                const kindIcon = kind === 'namespace' ? '📦' :
+                                 kind === 'class' ? '🔷' :
+                                 kind === 'interface' ? '🔶' :
+                                 kind === 'struct' ? '🧱' :
+                                 kind === 'enum' ? '🔢' :
+                                 kind === 'method' ? '⚡' :
+                                 kind === 'property' ? '🔧' :
+                                 kind === 'field' ? '🏷️' : '📄';
 
                 const hasChildren = node.children && node.children.length > 0;
-                const sig = node.signature ? ' <span style="opacity: 0.6; font-size: 10px;">' + escapeHtml(node.signature) + '</span>' : '';
+                const sig = node.signature ? ' <span class="decompile-sig" style="opacity: 0.6; font-size: 10px;">' + escapeHtml(node.signature) + '</span>' : '';
 
                 if (hasChildren) {
-                    html += '<details open style="margin-left: ' + (node.kind === 'namespace' ? '0' : '12px') + '; margin-bottom: 2px;">' +
-                        '<summary class="decompile-tree-item" style="font-weight: ' + (node.kind === 'namespace' ? '600' : '500') + ';">' +
-                        kindIcon + ' ' + escapeHtml(node.name) + sig +
+                    html += '<details open class="decompile-group" data-name="' + escapeHtml(node.name) + '" data-kind="' + escapeHtml(kind) + '" style="margin-left: ' + (kind === 'namespace' ? '0' : '12px') + '; margin-bottom: 2px;">' +
+                        '<summary class="decompile-tree-item" data-name="' + escapeHtml(node.name) + '" data-kind="' + escapeHtml(kind) + '" style="font-weight: ' + (kind === 'namespace' ? '600' : '500') + ';">' +
+                        '<span class="decompile-item-icon">' + kindIcon + '</span> <span class="decompile-item-name">' + escapeHtml(node.name) + '</span>' + sig +
                         '</summary>' +
                         renderOutlineTree(node.children, uniqueId) +
                         '</details>';
                 } else {
-                    html += '<div class="decompile-tree-item" style="margin-left: 20px; font-size: 10px;" onclick="jumpToDecompiledMember(\'' + uniqueId + '\', \'' + escapeHtml(node.name) + '\')">' +
-                        kindIcon + ' ' + escapeHtml(node.name) + sig +
+                    html += '<div class="decompile-tree-item decompile-leaf" data-name="' + escapeHtml(node.name) + '" data-kind="' + escapeHtml(kind) + '" style="margin-left: 20px; font-size: 10px;" onclick="jumpToDecompiledMember(\'' + uniqueId + '\', \'' + escapeHtml(node.name) + '\')">' +
+                        '<span class="decompile-item-icon">' + kindIcon + '</span> <span class="decompile-item-name">' + escapeHtml(node.name) + '</span>' + sig +
                         '</div>';
                 }
             }
             return html;
         }
 
+        function filterDecompileByKind(uniqueId, kind) {
+            const container = document.getElementById(uniqueId + '_outline');
+            if (!container) return;
+            const buttons = container.querySelectorAll('.decompile-kind-btn');
+            buttons.forEach(b => {
+                b.classList.toggle('active', b.getAttribute('data-kind') === kind);
+            });
+            filterDecompileOutline(uniqueId, kind);
+        }
+
+        function filterDecompileOutline(uniqueId, kindOverride) {
+            const container = document.getElementById(uniqueId + '_outline');
+            if (!container) return;
+            const searchInput = document.getElementById(uniqueId + '_search');
+            const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+
+            let activeKind = kindOverride;
+            if (!activeKind) {
+                const activeBtn = container.querySelector('.decompile-kind-btn.active');
+                activeKind = activeBtn ? activeBtn.getAttribute('data-kind') : 'all';
+            }
+
+            const treeView = document.getElementById(uniqueId + '_tree');
+            if (!treeView) return;
+
+            const allGroups = Array.from(treeView.querySelectorAll('.decompile-group'));
+            const allItems = Array.from(treeView.querySelectorAll('.decompile-tree-item'));
+
+            if (!query && activeKind === 'all') {
+                allGroups.forEach(g => { g.style.display = ''; });
+                allItems.forEach(item => {
+                    item.style.display = '';
+                    const nameSpan = item.querySelector('.decompile-item-name');
+                    const rawName = item.getAttribute('data-name') || '';
+                    if (nameSpan) nameSpan.textContent = rawName;
+                });
+                return;
+            }
+
+            function matchesKind(itemKind) {
+                if (activeKind === 'all') return true;
+                if (activeKind === 'type') return ['class', 'interface', 'struct', 'enum'].includes(itemKind);
+                if (activeKind === 'method') return itemKind === 'method';
+                if (activeKind === 'property') return ['property', 'field'].includes(itemKind);
+                return true;
+            }
+
+            allItems.forEach(item => {
+                const rawName = item.getAttribute('data-name') || '';
+                const itemKind = item.getAttribute('data-kind') || '';
+                const nameMatches = !query || rawName.toLowerCase().includes(query);
+                const kindMatches = matchesKind(itemKind);
+                const isMatch = nameMatches && kindMatches;
+
+                const nameSpan = item.querySelector('.decompile-item-name');
+                if (nameSpan) {
+                    if (query && isMatch) {
+                        const idx = rawName.toLowerCase().indexOf(query);
+                        if (idx >= 0) {
+                            nameSpan.innerHTML = escapeHtml(rawName.substring(0, idx)) +
+                                '<mark class="symbol-match">' + escapeHtml(rawName.substring(idx, idx + query.length)) + '</mark>' +
+                                escapeHtml(rawName.substring(idx + query.length));
+                        } else {
+                            nameSpan.textContent = rawName;
+                        }
+                    } else {
+                        nameSpan.textContent = rawName;
+                    }
+                }
+
+                if (item.classList.contains('decompile-leaf')) {
+                    item.style.display = isMatch ? '' : 'none';
+                }
+            });
+
+            for (let i = allGroups.length - 1; i >= 0; i--) {
+                const group = allGroups[i];
+                const rawName = group.getAttribute('data-name') || '';
+                const itemKind = group.getAttribute('data-kind') || '';
+                const selfMatches = (!query || rawName.toLowerCase().includes(query)) && matchesKind(itemKind);
+
+                const hasVisibleChildren = Array.from(group.children).some(child => {
+                    if (child.tagName.toLowerCase() === 'summary') return false;
+                    if (child.classList.contains('decompile-group')) return child.style.display !== 'none';
+                    if (child.classList.contains('decompile-tree-item')) return child.style.display !== 'none';
+                    return false;
+                });
+
+                if (selfMatches || hasVisibleChildren) {
+                    group.style.display = '';
+                    group.open = true;
+                } else {
+                    group.style.display = 'none';
+                }
+            }
+        }
+
         function switchDecompileTab(uniqueId, tabName) {
             const container = document.getElementById(uniqueId);
             if (!container) return;
-            const buttons = container.querySelectorAll('.decompile-tab-btn');
+            const splitBtn = document.getElementById(uniqueId + '_split_btn');
+            if (splitBtn) splitBtn.classList.remove('active');
+
+            const pane = document.getElementById('preview-pane');
+            if (pane) pane.classList.remove('split-active');
+
+            const buttons = container.querySelectorAll('.decompile-tab-bar > .decompile-tab-btn:not(.decompile-split-btn)');
             buttons.forEach(b => {
                 b.classList.toggle('active', b.getAttribute('data-tab') === tabName);
             });
             const outline = document.getElementById(uniqueId + '_outline');
             const code = document.getElementById(uniqueId + '_code');
+            const il = document.getElementById(uniqueId + '_il');
+            const split = document.getElementById(uniqueId + '_split');
             if (outline) outline.style.display = tabName === 'outline' ? 'block' : 'none';
             if (code) code.style.display = tabName === 'code' ? 'block' : 'none';
+            if (il) il.style.display = tabName === 'il' ? 'block' : 'none';
+            if (split) split.style.display = 'none';
+        }
+
+        function toggleDecompileSplitView(uniqueId) {
+            const container = document.getElementById(uniqueId);
+            if (!container) return;
+            const splitBtn = document.getElementById(uniqueId + '_split_btn');
+            const outline = document.getElementById(uniqueId + '_outline');
+            const code = document.getElementById(uniqueId + '_code');
+            const il = document.getElementById(uniqueId + '_il');
+            const split = document.getElementById(uniqueId + '_split');
+            const pane = document.getElementById('preview-pane');
+
+            const isCurrentlySplit = splitBtn && splitBtn.classList.contains('active');
+            if (isCurrentlySplit) {
+                if (pane) pane.classList.remove('split-active');
+                switchDecompileTab(uniqueId, 'code');
+            } else {
+                if (pane) pane.classList.add('split-active');
+                const tabButtons = container.querySelectorAll('.decompile-tab-bar > .decompile-tab-btn');
+                tabButtons.forEach(b => b.classList.remove('active'));
+                if (splitBtn) splitBtn.classList.add('active');
+
+                if (outline) outline.style.display = 'none';
+                if (code) code.style.display = 'none';
+                if (il) il.style.display = 'none';
+                if (split) split.style.display = 'block';
+
+                const leftPre = document.getElementById(uniqueId + '_split_left_pre');
+                const rightPre = document.getElementById(uniqueId + '_split_right_pre');
+                if (leftPre && rightPre && !leftPre._hasSyncScroll) {
+                    leftPre._hasSyncScroll = true;
+                    let syncing = false;
+                    leftPre.addEventListener('scroll', () => {
+                        if (syncing) return;
+                        syncing = true;
+                        const ratio = leftPre.scrollTop / (leftPre.scrollHeight - leftPre.clientHeight || 1);
+                        rightPre.scrollTop = ratio * (rightPre.scrollHeight - rightPre.clientHeight || 1);
+                        requestAnimationFrame(() => { syncing = false; });
+                    });
+                    rightPre.addEventListener('scroll', () => {
+                        if (syncing) return;
+                        syncing = true;
+                        const ratio = rightPre.scrollTop / (rightPre.scrollHeight - rightPre.clientHeight || 1);
+                        leftPre.scrollTop = ratio * (leftPre.scrollHeight - leftPre.clientHeight || 1);
+                        requestAnimationFrame(() => { syncing = false; });
+                    });
+                }
+            }
+        }
+
+        function copyDecompiledIL(uniqueId) {
+            const data = (window._decompileDataMap && window._decompileDataMap.get(uniqueId));
+            if (!data || !data.intermediateLanguageCode) {
+                showToast('No IL/bytecode to copy', '⚠️');
+                return;
+            }
+            navigator.clipboard.writeText(data.intermediateLanguageCode);
+            showToast('IL / Bytecode copied to clipboard!', '⚡');
+        }
+
+        function showExportProjectModal(uniqueId, fullPath) {
+            const data = (window._decompileDataMap && window._decompileDataMap.get(uniqueId));
+            const fileName = data ? data.fileName : fullPath.split('/').pop();
+            const stem = fileName.replace(/\.[^/.]+$/, '');
+            const parentDir = fullPath.substring(0, fullPath.lastIndexOf('/')) || '';
+            const defaultDest = parentDir ? parentDir + '/' + stem + '_Decompiled' : stem + '_Decompiled';
+
+            const modalHtml = '<div class="modal-overlay" id="exportProjModal" style="display: flex; align-items: center; justify-content: center; z-index: 10000;">' +
+                '<div class="modal-box" style="width: 520px; max-width: 90vw; background: #181825; border: 1px solid #313244; border-radius: 10px; padding: 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.6);">' +
+                    '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">' +
+                        '<h3 style="margin: 0; font-size: 15px; color: #89b4fa; display: flex; align-items: center; gap: 8px;">📦 Reconstruct Project to Disk</h3>' +
+                        '<button class="modal-btn" style="padding: 2px 8px; font-size: 12px;" onclick="document.getElementById(\'exportProjModal\').remove()">✕</button>' +
+                    '</div>' +
+                    '<p style="font-size: 12px; color: var(--text-muted); margin: 0 0 14px 0;">' +
+                        'Reconstruct a complete, compilable source project from <code>' + escapeHtml(fileName) + '</code>. ' +
+                        'Source files will be structured into their original package/namespace directories with an active project file (.csproj, pom.xml, or CMakeLists.txt).' +
+                    '</p>' +
+                    '<div style="margin-bottom: 12px;">' +
+                        '<label style="display: block; font-size: 11px; font-weight: 600; color: #cdd6f4; margin-bottom: 4px;">Destination Directory:</label>' +
+                        '<input type="text" id="exportDestInput" class="modal-input" value="' + escapeHtml(defaultDest) + '" style="width: 100%; box-sizing: border-box; font-family: monospace; font-size: 12px; padding: 8px; border-radius: 6px; background: #11111b; border: 1px solid #313244; color: #fff;">' +
+                    '</div>' +
+                    '<div id="exportStatusArea" style="min-height: 24px; margin-bottom: 14px; font-size: 12px;"></div>' +
+                    '<div style="display: flex; justify-content: flex-end; gap: 8px;">' +
+                        '<button class="modal-btn" onclick="document.getElementById(\'exportProjModal\').remove()">Cancel</button>' +
+                        '<button class="modal-btn" id="exportActionBtn" style="background: #6c5ce7; color: #fff; font-weight: 600;" onclick="executeExportProject(\'' + escapePath(fullPath) + '\')">🚀 Reconstruct Project</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+
+            const existing = document.getElementById('exportProjModal');
+            if (existing) existing.remove();
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        async function executeExportProject(filePath) {
+            const destInput = document.getElementById('exportDestInput');
+            const statusArea = document.getElementById('exportStatusArea');
+            const actionBtn = document.getElementById('exportActionBtn');
+            if (!destInput || !statusArea) return;
+
+            const targetDest = destInput.value.trim();
+            if (!targetDest) {
+                statusArea.innerHTML = '<span style="color: #f38ba8;">Please specify a destination directory.</span>';
+                return;
+            }
+
+            statusArea.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; color: #89b4fa;"><div class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></div> Reconstructing source files and project structure...</div>';
+            if (actionBtn) actionBtn.disabled = true;
+
+            try {
+                const res = await fetch('/api/files/decompile/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: filePath, destinationDir: targetDest })
+                });
+
+                const data = await res.json();
+                if (!res.ok || !data.isSuccess) {
+                    throw new Error(data.errorMessage || 'Export failed with HTTP ' + res.status);
+                }
+
+                statusArea.innerHTML = '<div style="background: rgba(166, 227, 161, 0.1); border: 1px solid #a6e3a1; border-radius: 6px; padding: 10px; color: #a6e3a1;">' +
+                    '<div style="font-weight: 600; margin-bottom: 4px;">🎉 Reconstructed Successfully!</div>' +
+                    '<div style="font-size: 11px; opacity: 0.9;">' + escapeHtml(data.summary) + '</div>' +
+                    (data.projectFilePath ? '<div style="font-size: 11px; margin-top: 4px; font-family: monospace;">Project: ' + escapeHtml(data.projectFilePath) + '</div>' : '') +
+                    '</div>';
+
+                if (actionBtn) {
+                    actionBtn.textContent = '📂 Open Folder in File Manager';
+                    actionBtn.disabled = false;
+                    actionBtn.onclick = () => {
+                        const modal = document.getElementById('exportProjModal');
+                        if (modal) modal.remove();
+                        if (typeof loadDirectory === 'function') {
+                            loadDirectory(data.projectDirectory);
+                        }
+                    };
+                }
+
+                showToast('Reconstructed ' + data.filesWritten + ' files to disk!', '🎉');
+            } catch (err) {
+                statusArea.innerHTML = '<div style="color: #f38ba8;">Export error: ' + escapeHtml(err.message) + '</div>';
+                if (actionBtn) actionBtn.disabled = false;
+            }
         }
 
         function copyDecompileSummary(uniqueId) {
@@ -5625,15 +6683,32 @@ public static class FileManagerWebApp
 
         function jumpToDecompiledMember(uniqueId, memberName) {
             switchDecompileTab(uniqueId, 'code');
-            const codeText = document.getElementById(uniqueId + '_code_text');
-            if (!codeText) return;
-            const pre = codeText.parentElement;
+            const codeElem = document.getElementById(uniqueId + '_code_text');
+            if (!codeElem) return;
+            const pre = codeElem.parentElement;
             if (!pre) return;
-            const text = codeText.innerText;
-            const idx = text.indexOf(memberName);
-            if (idx >= 0) {
-                const ratio = idx / text.length;
-                pre.scrollTop = pre.scrollHeight * ratio;
+            const text = codeElem.innerText;
+            const lines = text.split('\n');
+            let targetLineIdx = -1;
+            const cleanName = memberName.replace(/\(.*\)/, '').trim();
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.includes(cleanName) || line.includes(memberName)) {
+                    targetLineIdx = i;
+                    break;
+                }
+            }
+
+            if (targetLineIdx >= 0) {
+                const approxLineHeight = 17;
+                pre.scrollTop = Math.max(0, (targetLineIdx * approxLineHeight) - 80);
+                showToast('Jumped to line ' + (targetLineIdx + 1) + ': ' + cleanName, '⚡');
+            } else {
+                const idx = text.indexOf(memberName);
+                if (idx >= 0) {
+                    pre.scrollTop = pre.scrollHeight * (idx / text.length);
+                }
             }
         }
 
@@ -6167,7 +7242,10 @@ public static class FileManagerWebApp
 
         async function handlePreview(name, isDir) {
             const previewPane = document.getElementById('preview-pane');
-            if (previewPane.classList.contains('collapsed')) return;
+            if (previewPane) {
+                previewPane.classList.remove('split-active');
+                if (previewPane.classList.contains('collapsed')) return;
+            }
 
             const previewContent = document.getElementById('preview-content');
             document.querySelector('#preview-pane h2').innerText = name;
@@ -6295,16 +7373,207 @@ public static class FileManagerWebApp
             showToast(isWindows ? 'Revealed in File Explorer' : 'Revealed in Finder', '📂');
         }
 
+        // ══════════════════════════════════════════════════════════
+        // ⚖️ VISUAL FILE DIFF & COMPARISON
+        // ══════════════════════════════════════════════════════════
+        let activeDiffState = { fileA: '', fileB: '', data: null, mode: 'split' };
+
+        async function openVisualDiff(fileA, fileB) {
+            hideContextMenu();
+            const modal = document.getElementById('modal-diff');
+            const container = document.getElementById('diff-body-container');
+            const tagA = document.getElementById('diff-tag-a');
+            const tagB = document.getElementById('diff-tag-b');
+            const statsBox = document.getElementById('diff-stats-box');
+            const statAdd = document.getElementById('diff-stat-add');
+            const statDel = document.getElementById('diff-stat-del');
+            const infoMsg = document.getElementById('diff-info-msg');
+
+            activeDiffState.fileA = fileA;
+            activeDiffState.fileB = fileB;
+            activeDiffState.data = null;
+
+            const nameA = fileA.split(/[\/\\]/).pop() || fileA;
+            const nameB = fileB === 'HEAD' ? 'Git HEAD' : (fileB.split(/[\/\\]/).pop() || fileB);
+
+            if (tagA) tagA.textContent = nameA;
+            if (tagB) tagB.textContent = nameB;
+            if (statsBox) statsBox.style.display = 'none';
+            if (infoMsg) infoMsg.textContent = 'Computing diff...';
+
+            if (container) {
+                container.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--text-muted);">' +
+                    '<div class="spinner" style="margin-bottom: 12px;"></div>' +
+                    '<div style="font-size: 13px; font-weight: 500;">Analyzing file differences...</div>' +
+                    '</div>';
+            }
+
+            if (modal) modal.classList.add('active');
+
+            try {
+                const res = await fetch('/api/files/diff?fileA=' + encodeURIComponent(fileA) + '&fileB=' + encodeURIComponent(fileB));
+                const data = await res.json();
+                const isFail = !res.ok || data.error || data.errorMessage || data.isBinary || (data.ok === false);
+                if (isFail) {
+                    const errorText = data.error || data.errorMessage || (data.isBinary ? (data.message || 'Binary files cannot be displayed as text diff.') : 'Could not compute diff for selected files.');
+                    if (container) {
+                        container.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--text-muted); padding: 20px; text-align: center;">' +
+                            '<div style="font-size: 32px; margin-bottom: 8px;">' + (data.isBinary ? '📦' : '⚠️') + '</div>' +
+                            '<div style="font-size: 14px; font-weight: 600; color: #fff;">' + (data.isBinary ? 'Binary File Comparison' : 'Diff Unavailable') + '</div>' +
+                            '<div style="font-size: 12px; margin-top: 6px; max-width: 400px; color: var(--text-muted);">' + escapeHtml(errorText) + '</div>' +
+                            '<button class="modal-btn" style="margin-top: 16px;" onclick="openDiffInVsCode()">🚀 Try Native VS Code Diff</button>' +
+                            '</div>';
+                    }
+                    if (infoMsg) infoMsg.textContent = '';
+                    return;
+                }
+
+                activeDiffState.data = data;
+                if (statsBox && data.stats) {
+                    statsBox.style.display = 'inline-flex';
+                    if (statAdd) statAdd.textContent = '+' + data.stats.added;
+                    if (statDel) statDel.textContent = '-' + data.stats.removed;
+                }
+                if (infoMsg && data.stats) {
+                    if (data.stats.added === 0 && data.stats.removed === 0) {
+                        infoMsg.textContent = '✓ Files are identical';
+                    } else {
+                        infoMsg.textContent = (data.stats.added + data.stats.removed) + ' differences found';
+                    }
+                }
+
+                renderDiffView();
+            } catch (err) {
+                if (container) {
+                    container.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--text-muted);">' +
+                        '<div style="font-size: 13px; color: #ff8b8b;">Failed to load diff: ' + escapeHtml(err.message || err) + '</div>' +
+                        '</div>';
+                }
+            }
+        }
+
+        function closeVisualDiff(e) {
+            if (e && e.target && e.target !== document.getElementById('modal-diff')) return;
+            const modal = document.getElementById('modal-diff');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function setDiffMode(mode) {
+            activeDiffState.mode = mode;
+            const btnSplit = document.getElementById('diff-btn-split');
+            const btnUnified = document.getElementById('diff-btn-unified');
+            if (btnSplit) btnSplit.classList.toggle('active', mode === 'split');
+            if (btnUnified) btnUnified.classList.toggle('active', mode === 'unified');
+            renderDiffView();
+        }
+
+        function renderDiffView() {
+            const container = document.getElementById('diff-body-container');
+            const data = activeDiffState.data;
+            if (!container || !data || !data.lines) return;
+
+            const nameA = activeDiffState.fileA.split(/[\/\\]/).pop() || activeDiffState.fileA;
+            const nameB = activeDiffState.fileB === 'HEAD' ? 'Git HEAD' : (activeDiffState.fileB.split(/[\/\\]/).pop() || activeDiffState.fileB);
+
+            if (activeDiffState.mode === 'split') {
+                let leftHtml = '';
+                let rightHtml = '';
+
+                for (let i = 0; i < data.lines.length; i++) {
+                    const row = data.lines[i];
+                    if (row.type === 'unchanged') {
+                        leftHtml += '<div class="diff-line-row"><span class="diff-num-col">' + (row.lineA || '') + '</span><span class="diff-text-col">' + escapeHtml(row.text) + '</span></div>';
+                        rightHtml += '<div class="diff-line-row"><span class="diff-num-col">' + (row.lineB || '') + '</span><span class="diff-text-col">' + escapeHtml(row.text) + '</span></div>';
+                    } else if (row.type === 'removed') {
+                        leftHtml += '<div class="diff-line-row removed"><span class="diff-num-col">' + (row.lineA || '') + '</span><span class="diff-text-col">' + escapeHtml(row.text) + '</span></div>';
+                        rightHtml += '<div class="diff-line-row empty"><span class="diff-num-col"></span><span class="diff-text-col">&nbsp;</span></div>';
+                    } else if (row.type === 'added') {
+                        leftHtml += '<div class="diff-line-row empty"><span class="diff-num-col"></span><span class="diff-text-col">&nbsp;</span></div>';
+                        rightHtml += '<div class="diff-line-row added"><span class="diff-num-col">' + (row.lineB || '') + '</span><span class="diff-text-col">' + escapeHtml(row.text) + '</span></div>';
+                    }
+                }
+
+                container.innerHTML = '<div class="diff-split-view">' +
+                    '<div class="diff-pane" id="diff-pane-left">' +
+                        '<div class="diff-pane-header"><span>' + escapeHtml(nameA) + '</span><span style="font-size: 10px; color: var(--text-muted);">Original</span></div>' +
+                        leftHtml +
+                    '</div>' +
+                    '<div class="diff-pane" id="diff-pane-right">' +
+                        '<div class="diff-pane-header"><span>' + escapeHtml(nameB) + '</span><span style="font-size: 10px; color: var(--text-muted);">' + (activeDiffState.fileB === 'HEAD' ? 'Git HEAD' : 'Modified') + '</span></div>' +
+                        rightHtml +
+                    '</div>' +
+                '</div>';
+
+                // Synchronize scrolling
+                const pLeft = document.getElementById('diff-pane-left');
+                const pRight = document.getElementById('diff-pane-right');
+                if (pLeft && pRight) {
+                    let syncing = false;
+                    pLeft.addEventListener('scroll', function() {
+                        if (syncing) return;
+                        syncing = true;
+                        pRight.scrollTop = pLeft.scrollTop;
+                        pRight.scrollLeft = pLeft.scrollLeft;
+                        syncing = false;
+                    });
+                    pRight.addEventListener('scroll', function() {
+                        if (syncing) return;
+                        syncing = true;
+                        pLeft.scrollTop = pRight.scrollTop;
+                        pLeft.scrollLeft = pRight.scrollLeft;
+                        syncing = false;
+                    });
+                }
+            } else {
+                // Unified View
+                let unifiedHtml = '';
+                for (let i = 0; i < data.lines.length; i++) {
+                    const row = data.lines[i];
+                    if (row.type === 'unchanged') {
+                        unifiedHtml += '<div class="diff-line-row"><span class="diff-num-col">' + (row.lineA || '') + '</span><span class="diff-num-col">' + (row.lineB || '') + '</span><span class="diff-text-col"> ' + escapeHtml(row.text) + '</span></div>';
+                    } else if (row.type === 'removed') {
+                        unifiedHtml += '<div class="diff-line-row removed"><span class="diff-num-col">' + (row.lineA || '') + '</span><span class="diff-num-col"></span><span class="diff-text-col">-' + escapeHtml(row.text) + '</span></div>';
+                    } else if (row.type === 'added') {
+                        unifiedHtml += '<div class="diff-line-row added"><span class="diff-num-col"></span><span class="diff-num-col">' + (row.lineB || '') + '</span><span class="diff-text-col">+' + escapeHtml(row.text) + '</span></div>';
+                    }
+                }
+                container.innerHTML = '<div class="diff-pane" style="width: 100%;">' +
+                    '<div class="diff-pane-header"><span>' + escapeHtml(nameA) + ' ↔ ' + escapeHtml(nameB) + '</span><span style="font-size: 10px; color: var(--text-muted);">Unified Diff</span></div>' +
+                    unifiedHtml +
+                '</div>';
+            }
+        }
+
+        function openDiffInVsCode() {
+            if (!activeDiffState.fileA) return;
+            if (window.parent && window.parent !== window) {
+                if (activeDiffState.fileB === 'HEAD') {
+                    window.parent.postMessage({ command: 'diffWithHead', path: activeDiffState.fileA }, '*');
+                } else {
+                    window.parent.postMessage({ command: 'diffFiles', fileA: activeDiffState.fileA, fileB: activeDiffState.fileB }, '*');
+                }
+            }
+            showToast('Opening native VS Code diff editor...', '🚀');
+        }
+
         function diffSelectedItemWithHead() {
             hideContextMenu();
             if (!selectedItem) return;
             const sep = isWindows ? '\\' : '/';
             const p = currentPath.endsWith(sep) ? currentPath + selectedItem.name : currentPath + sep + selectedItem.name;
-            if (window.parent && window.parent !== window) {
-                window.parent.postMessage({ command: 'diffWithHead', path: p }, '*');
+            openVisualDiff(p, 'HEAD');
+        }
+
+        function diffSelectedPair() {
+            hideContextMenu();
+            if (selectedItems.length !== 2) {
+                showToast('Please select exactly 2 files to compare', '⚠️');
+                return;
             }
-            fetch('/api/files/diffWithHead?path=' + encodeURIComponent(p)).catch(() => {});
-            showToast('Opening diff with HEAD in editor...', '⚖️');
+            const sep = isWindows ? '\\' : '/';
+            const pA = (selectedItems[0].path) ? selectedItems[0].path : (currentPath.endsWith(sep) ? currentPath + selectedItems[0].name : currentPath + sep + selectedItems[0].name);
+            const pB = (selectedItems[1].path) ? selectedItems[1].path : (currentPath.endsWith(sep) ? currentPath + selectedItems[1].name : currentPath + sep + selectedItems[1].name);
+            openVisualDiff(pA, pB);
         }
 
         function copyPathToClipboard(isRelative) {
@@ -6421,7 +7690,7 @@ public static class FileManagerWebApp
             let html = '';
             userBookmarks.forEach(function(b) {
                 const isActive = b.path === currentPath;
-                html += '<div class="bookmark-chip ' + (isActive ? 'active' : '') + '" onclick="navigateTo(\'' + escapePath(b.path) + '\')" title="' + escapeHtml(b.path) + '">' +
+                html += '<div class="bookmark-chip ' + (isActive ? 'active' : '') + '" onclick="navigateTo(\'' + escapePath(b.path) + '\')" ondragover="handleBookmarkDragOver(event, \'' + escapePath(b.path) + '\')" ondragleave="handleBookmarkDragLeave(event)" ondrop="handleBookmarkDrop(event, \'' + escapePath(b.path) + '\')" title="' + escapeHtml(b.path) + '">' +
                     '<span>' + (b.icon || '📁') + '</span>' +
                     '<span class="chip-name">' + escapeHtml(b.name) + '</span>' +
                     (!b.isDefault ? '<span class="remove-pin" onclick="event.stopPropagation(); removeBookmark(\'' + escapePath(b.path) + '\')" title="Unpin">✕</span>' : '') +
@@ -6890,6 +8159,10 @@ public static class FileManagerWebApp
             const canDiff = gitCode && (gitCode === 'M' || gitCode === 'A');
             document.getElementById('ctx-diff').style.display = (canDiff && !isDir && isSingle) ? 'flex' : 'none';
 
+            // Show Compare if exactly 2 items selected
+            const ctxCompareTwo = document.getElementById('ctx-compare-two');
+            if (ctxCompareTwo) ctxCompareTwo.style.display = (count === 2) ? 'flex' : 'none';
+
             // Pin/Unpin folder option
             const pinItem = document.getElementById('ctx-pin-folder');
             if (pinItem) {
@@ -7062,6 +8335,7 @@ public static class FileManagerWebApp
         document.addEventListener('click', function(e) {
             hideContextMenu();
             closeViewMenu();
+            clearTypeAhead();
             const container = document.querySelector('.path-bar-container');
             if (container && !container.contains(e.target)) {
                 closePathDropdown();
@@ -7072,6 +8346,7 @@ public static class FileManagerWebApp
             const isEditing = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
             
             if (e.key === 'Escape') {
+                clearTypeAhead();
                 closePathDropdown();
                 closeViewMenu();
                 hideModals();
@@ -7159,8 +8434,13 @@ public static class FileManagerWebApp
                 return;
             }
 
-            // Spacebar: Quick Look (Finder style)
+            // Spacebar: Quick Look (Finder style) or Type-Ahead space
             if (e.code === 'Space') {
+                if (typeAheadBuffer.length > 0) {
+                    e.preventDefault();
+                    handleTypeAhead(' ');
+                    return;
+                }
                 e.preventDefault();
                 toggleQuickLook();
                 return;
@@ -7187,11 +8467,52 @@ public static class FileManagerWebApp
                 return;
             }
 
+            // Arrow Keys Navigation & Home/End
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                navigateSelection(1, e.shiftKey);
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                navigateSelection(-1, e.shiftKey);
+                return;
+            }
+            if (!e.altKey && e.key === 'ArrowRight') {
+                e.preventDefault();
+                navigateSelection(1, e.shiftKey);
+                return;
+            }
+            if (!e.altKey && e.key === 'ArrowLeft') {
+                e.preventDefault();
+                navigateSelection(-1, e.shiftKey);
+                return;
+            }
+            if (e.key === 'Home') {
+                e.preventDefault();
+                navigateSelection('first', e.shiftKey);
+                return;
+            }
+            if (e.key === 'End') {
+                e.preventDefault();
+                navigateSelection('last', e.shiftKey);
+                return;
+            }
+
             // F2: Rename
             if (e.key === 'F2') {
                 e.preventDefault();
                 renameSelectedItem();
                 return;
+            }
+
+            // Backspace in Type-Ahead mode edits the search buffer
+            if (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey) {
+                if (typeAheadBuffer.length > 0) {
+                    e.preventDefault();
+                    handleTypeAheadBackspace();
+                    return;
+                }
             }
 
             // Delete: Delete / Backspace / Cmd+Backspace (Mac & Windows delete)
@@ -7255,6 +8576,24 @@ public static class FileManagerWebApp
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'r' || e.key === 'R')) {
                 e.preventDefault();
                 showBatchRenameModal();
+                return;
+            }
+
+            // Incremental Type-to-Select / Quick Jump (Finder & Explorer style)
+            let typedChar = null;
+            if (e.key.length === 1) {
+                typedChar = e.key;
+            } else if (/^Key[A-Za-z]$/.test(e.key)) {
+                typedChar = e.key.slice(3).toLowerCase();
+            } else if (/^Digit[0-9]$/.test(e.key)) {
+                typedChar = e.key.slice(5);
+            }
+
+            if (typedChar && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                if (typedChar === '/' && typeAheadBuffer.length === 0) return;
+                if (typedChar === '?' && typeAheadBuffer.length === 0) return;
+                e.preventDefault();
+                handleTypeAhead(typedChar);
                 return;
             }
         });
@@ -7737,12 +9076,305 @@ public static class FileManagerWebApp
             }, { passive: false });
         }
 
+        // ══════════════════════════════════════════════════════════
+        // 🖱️ DRAG & DROP SYSTEM (Internal Move/Copy + Desktop Upload)
+        // ══════════════════════════════════════════════════════════
+        let draggedVenElItems = [];
+
+        function handleItemDragStart(e, name, isDir) {
+            const isAlreadySelected = selectedItems.some(function(i) { return i.name === name; });
+            if (!isAlreadySelected) {
+                const item = currentItems.find(function(i) { return i.name === name; }) || { name: name, type: isDir ? 'Directory' : 'File' };
+                selectedItems = [item];
+                selectedItem = item;
+                syncItemSelectionDOM();
+                updateSelectionState();
+            }
+
+            const sep = isWindows ? '\\' : '/';
+            draggedVenElItems = selectedItems.map(function(i) {
+                return i.path || (currentPath.endsWith(sep) ? currentPath + i.name : currentPath + sep + i.name);
+            });
+
+            if (e.dataTransfer) {
+                e.dataTransfer.setData('application/json', JSON.stringify({
+                    type: 'venel-internal-items',
+                    items: draggedVenElItems
+                }));
+                e.dataTransfer.effectAllowed = 'copyMove';
+            }
+
+            const elem = e.currentTarget;
+            if (elem) elem.classList.add('dragging');
+        }
+
+        function handleItemDragEnd(e) {
+            draggedVenElItems = [];
+            const elem = e.currentTarget;
+            if (elem) elem.classList.remove('dragging');
+            document.querySelectorAll('.drag-over').forEach(function(el) { el.classList.remove('drag-over'); });
+            document.querySelectorAll('.dragging').forEach(function(el) { el.classList.remove('dragging'); });
+        }
+
+        function handleFolderDragOver(e, folderName) {
+            const sep = isWindows ? '\\' : '/';
+            const targetPath = currentPath.endsWith(sep) ? currentPath + folderName : currentPath + sep + folderName;
+            if (draggedVenElItems.includes(targetPath)) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move';
+            }
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleFolderDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        async function handleFolderDrop(e, folderName) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.remove('drag-over');
+
+            const sep = isWindows ? '\\' : '/';
+            const destinationDir = currentPath.endsWith(sep) ? currentPath + folderName : currentPath + sep + folderName;
+
+            if (draggedVenElItems.length > 0) {
+                const itemsToTransfer = draggedVenElItems.slice();
+                draggedVenElItems = [];
+                const isCopy = e.altKey;
+                const endpoint = isCopy ? '/api/files/copy' : '/api/files/move';
+
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items: itemsToTransfer, destinationDir: destinationDir })
+                    });
+                    const result = await res.json();
+                    if (!res.ok || result.error) {
+                        showToast('Transfer failed: ' + (result.error || 'Server error'), '⚠️');
+                    } else {
+                        showToast((isCopy ? 'Copied ' : 'Moved ') + itemsToTransfer.length + ' item(s) to ' + folderName, '📂');
+                        refreshCurrentFolder();
+                    }
+                } catch (err) {
+                    showToast('Transfer error: ' + (err.message || err), '⚠️');
+                }
+                return;
+            }
+
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                await uploadFileList(e.dataTransfer.files, destinationDir);
+            }
+        }
+
+        function handleBreadcrumbDragOver(e, targetPath) {
+            if (targetPath === currentPath) return;
+            if (draggedVenElItems.includes(targetPath)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move';
+            }
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleBreadcrumbDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        async function handleBreadcrumbDrop(e, targetPath) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.remove('drag-over');
+
+            if (draggedVenElItems.length > 0) {
+                const itemsToTransfer = draggedVenElItems.slice();
+                draggedVenElItems = [];
+                const isCopy = e.altKey;
+                const endpoint = isCopy ? '/api/files/copy' : '/api/files/move';
+
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items: itemsToTransfer, destinationDir: targetPath })
+                    });
+                    const result = await res.json();
+                    if (!res.ok || result.error) {
+                        showToast('Transfer failed: ' + (result.error || 'Server error'), '⚠️');
+                    } else {
+                        const targetName = targetPath.split(/[\/\\]/).filter(Boolean).pop() || targetPath;
+                        showToast((isCopy ? 'Copied ' : 'Moved ') + itemsToTransfer.length + ' item(s) to ' + targetName, '📂');
+                        refreshCurrentFolder();
+                    }
+                } catch (err) {
+                    showToast('Transfer error: ' + (err.message || err), '⚠️');
+                }
+                return;
+            }
+
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                await uploadFileList(e.dataTransfer.files, targetPath);
+            }
+        }
+
+        function handleBookmarkDragOver(e, targetPath) {
+            if (draggedVenElItems.includes(targetPath)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = e.altKey ? 'copy' : 'move';
+            }
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function handleBookmarkDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        async function handleBookmarkDrop(e, targetPath) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.currentTarget.classList.remove('drag-over');
+
+            if (draggedVenElItems.length > 0) {
+                const itemsToTransfer = draggedVenElItems.slice();
+                draggedVenElItems = [];
+                const isCopy = e.altKey;
+                const endpoint = isCopy ? '/api/files/copy' : '/api/files/move';
+
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items: itemsToTransfer, destinationDir: targetPath })
+                    });
+                    const result = await res.json();
+                    if (!res.ok || result.error) {
+                        showToast('Transfer failed: ' + (result.error || 'Server error'), '⚠️');
+                    } else {
+                        const targetName = targetPath.split(/[\/\\]/).filter(Boolean).pop() || targetPath;
+                        showToast((isCopy ? 'Copied ' : 'Moved ') + itemsToTransfer.length + ' item(s) to ' + targetName, '⭐');
+                        refreshCurrentFolder();
+                    }
+                } catch (err) {
+                    showToast('Transfer error: ' + (err.message || err), '⚠️');
+                }
+                return;
+            }
+
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                await uploadFileList(e.dataTransfer.files, targetPath);
+            }
+        }
+
+        async function uploadFileList(files, targetDir) {
+            if (!files || files.length === 0) return;
+            const destDir = targetDir || currentPath;
+            showToast('Uploading ' + files.length + ' file(s)...', '⏳');
+
+            const payloadFiles = [];
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                try {
+                    const base64 = await readFileAsBase64(file);
+                    payloadFiles.push({
+                        name: file.name,
+                        contentBase64: base64
+                    });
+                } catch (err) {
+                    console.error('Failed to read file:', file.name, err);
+                }
+            }
+
+            if (payloadFiles.length === 0) return;
+
+            try {
+                const res = await fetch('/api/files/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ destinationDir: destDir, files: payloadFiles })
+                });
+                const result = await res.json();
+                if (!res.ok || result.error) {
+                    showToast('Upload failed: ' + (result.error || 'Server error'), '⚠️');
+                } else {
+                    showToast('Successfully added ' + result.count + ' file(s)!', '📂');
+                    refreshCurrentFolder();
+                }
+            } catch (err) {
+                showToast('Upload error: ' + (err.message || err), '⚠️');
+            }
+        }
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function() {
+                    const dataUrl = reader.result;
+                    const base64 = dataUrl.split(',')[1] || '';
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function setupWindowDragAndDrop() {
+            const overlay = document.getElementById('dropOverlay');
+            const targetName = document.getElementById('dropOverlayTargetName');
+            let dragCounter = 0;
+
+            window.addEventListener('dragenter', function(e) {
+                if (draggedVenElItems.length > 0) return;
+                if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+
+                dragCounter++;
+                if (overlay) {
+                    if (targetName) targetName.textContent = currentPath;
+                    overlay.classList.add('active');
+                }
+            });
+
+            window.addEventListener('dragleave', function(e) {
+                if (draggedVenElItems.length > 0) return;
+                dragCounter--;
+                if (dragCounter <= 0) {
+                    dragCounter = 0;
+                    if (overlay) overlay.classList.remove('active');
+                }
+            });
+
+            window.addEventListener('dragover', function(e) {
+                if (draggedVenElItems.length > 0) return;
+                if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+
+            window.addEventListener('drop', async function(e) {
+                dragCounter = 0;
+                if (overlay) overlay.classList.remove('active');
+                if (draggedVenElItems.length > 0) return;
+                if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+                await uploadFileList(e.dataTransfer.files, currentPath);
+            });
+        }
+
         // Initialize
         fetchRoots();
         initBookmarks();
         const initialTab = tabs.find(function(t) { return t.id === activeTabId; }) || tabs[0];
         navigateTo(initialTab.path);
         setView(currentViewMode);
+        setupWindowDragAndDrop();
 
         // Update OS-specific tab shortcut badges
         const badgeShortcut = document.getElementById('badge-tab-shortcut');

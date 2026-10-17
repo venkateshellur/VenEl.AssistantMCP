@@ -35,6 +35,12 @@ public class DecompileResult
     [JsonPropertyName("decompiledCode")]
     public string DecompiledCode { get; set; } = string.Empty;
 
+    [JsonPropertyName("intermediateLanguageCode")]
+    public string? IntermediateLanguageCode { get; set; }
+
+    [JsonPropertyName("canExportProject")]
+    public bool CanExportProject { get; set; } = true;
+
     [JsonPropertyName("isSuccess")]
     public bool IsSuccess { get; set; } = true;
 

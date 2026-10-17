@@ -24,7 +24,7 @@ public static class DecompilerServiceExtensions
             // ── Self-register MCP tools into the shared registry ──────────────────
             services.GetOrAddFeatureRegistry().Register(
                 featureName: "Decompiler",
-                description: "Decompiler & Binary Inspection tools: decompile and inspect .NET assemblies (.dll, .exe) and Java binaries (.class, .jar).",
+                description: "Decompiler & Binary Inspection tools: decompile and inspect .NET assemblies (.dll, .exe), Java (.class, .jar), WebAssembly (.wasm), and native binaries (.dylib, .so, native .dll).",
                 toolRegistration: mcpBuilder => mcpBuilder.WithTools<DecompilerDispatcherTool>());
 
             // ── Action Handlers ───────────────────────────────────────────────────

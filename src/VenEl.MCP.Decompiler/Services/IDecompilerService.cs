@@ -8,4 +8,5 @@ public interface IDecompilerService
 {
     bool CanDecompile(string filePath);
     Task<DecompileResult> DecompileAsync(string filePath, CancellationToken ct = default);
+    Task<ExportProjectResult> ExportProjectAsync(string filePath, string? destinationDir = null, CancellationToken ct = default);
 }

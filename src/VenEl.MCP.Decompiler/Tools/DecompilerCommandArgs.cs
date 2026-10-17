@@ -12,4 +12,7 @@ public sealed class DecompilerCommandArgs
 
     [JsonPropertyName("includeCode")]
     public bool IncludeCode { get; set; } = true;
+
+    [JsonPropertyName("destinationDir")]
+    public string? DestinationDir { get; set; }
 }
