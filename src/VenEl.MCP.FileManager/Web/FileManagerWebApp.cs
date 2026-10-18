@@ -528,6 +528,31 @@ public static class FileManagerWebApp
         _app.MapGet("/api/files/openSettings", () => Results.Ok(new { ok = true }));
         _app.MapGet("/api/files/toggleSidebar", () => Results.Ok(new { ok = true }));
 
+        // 11c2. Agent Machine Search (Spotlight on macOS / PowerShell on Windows / find on Linux)
+        _app.MapGet("/api/files/agentSearch", async (string? query, string? scope, string? currentPath, int? maxResults) =>
+        {
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return Results.BadRequest(new { error = "Query is required" });
+            }
+
+            var effectiveScope = string.IsNullOrWhiteSpace(scope) ? "machine" : scope;
+            var effectiveMax = Math.Min(maxResults ?? 80, 150);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var (engine, items) = await PerformAgentSearchAsync(query.Trim(), effectiveScope, currentPath ?? "", effectiveMax);
+            sw.Stop();
+
+            return Results.Ok(new
+            {
+                query = query.Trim(),
+                scope = effectiveScope,
+                executionTimeMs = sw.ElapsedMilliseconds,
+                engine,
+                count = items.Count,
+                items
+            });
+        });
+
         // 11d. Reveal in OS (Finder / File Explorer)
         _app.MapGet("/api/files/revealInOS", (string path) =>
         {
@@ -881,6 +906,56 @@ public static class FileManagerWebApp
                 }
                 catch { }
             }
+            if (items.Count > 0)
+            {
+                return ("Apple Spotlight Index (mdfind)", items);
+            }
+
+            // Fallback: If mdfind returns 0 results or path is unindexed, search with fast find
+            try
+            {
+                var fallbackRoot = scope == "home" ? home : (scope == "current" && !string.IsNullOrWhiteSpace(currentPath) && Directory.Exists(currentPath) ? currentPath : home);
+                var fallbackCmd = $"find \"{fallbackRoot}\" -iname \"*{cleanQuery}*\" -maxdepth 5 2>/dev/null | head -n {maxResults}";
+                var fallbackOut = await RunBashCommandAsync(fallbackCmd);
+                var fbLines = fallbackOut.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in fbLines)
+                {
+                    var filePath = line.Trim();
+                    try
+                    {
+                        if (File.Exists(filePath))
+                        {
+                            var fi = new FileInfo(filePath);
+                            items.Add(new
+                            {
+                                name = fi.Name,
+                                path = fi.FullName,
+                                directory = fi.DirectoryName,
+                                isDirectory = false,
+                                type = "File",
+                                size = fi.Length,
+                                modified = fi.LastWriteTimeUtc.ToString("o")
+                            });
+                        }
+                        else if (Directory.Exists(filePath))
+                        {
+                            var di = new DirectoryInfo(filePath);
+                            items.Add(new
+                            {
+                                name = di.Name,
+                                path = di.FullName,
+                                directory = di.Parent?.FullName ?? di.FullName,
+                                isDirectory = true,
+                                type = "Directory",
+                                size = 0L,
+                                modified = di.LastWriteTimeUtc.ToString("o")
+                            });
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
             return ("Apple Spotlight Index (mdfind)", items);
         }
         else if (isWindows)
@@ -918,7 +993,51 @@ public static class FileManagerWebApp
         }
         else
         {
-            return ("Generic", items);
+            try
+            {
+                var targetDir = scope == "home" ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : (scope == "current" && !string.IsNullOrWhiteSpace(currentPath) && Directory.Exists(currentPath) ? currentPath : "/");
+                var cmd = $"find \"{targetDir}\" -iname \"*{cleanQuery}*\" -maxdepth 6 2>/dev/null | head -n {maxResults}";
+                var output = await RunBashCommandAsync(cmd);
+                var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    var filePath = line.Trim();
+                    try
+                    {
+                        if (File.Exists(filePath))
+                        {
+                            var fi = new FileInfo(filePath);
+                            items.Add(new
+                            {
+                                name = fi.Name,
+                                path = fi.FullName,
+                                directory = fi.DirectoryName,
+                                isDirectory = false,
+                                type = "File",
+                                size = fi.Length,
+                                modified = fi.LastWriteTimeUtc.ToString("o")
+                            });
+                        }
+                        else if (Directory.Exists(filePath))
+                        {
+                            var di = new DirectoryInfo(filePath);
+                            items.Add(new
+                            {
+                                name = di.Name,
+                                path = di.FullName,
+                                directory = di.Parent?.FullName ?? di.FullName,
+                                isDirectory = true,
+                                type = "Directory",
+                                size = 0L,
+                                modified = di.LastWriteTimeUtc.ToString("o")
+                            });
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return ("Linux Find Index", items);
         }
     }
 
@@ -931,15 +1050,17 @@ public static class FileManagerWebApp
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "/bin/bash",
-                    Arguments = $"-c \"{command.Replace("\"", "\\\"")}\"",
                     RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
+                psi.ArgumentList.Add("-c");
+                psi.ArgumentList.Add(command);
                 using var p = System.Diagnostics.Process.Start(psi);
                 if (p == null) return string.Empty;
                 var outStr = p.StandardOutput.ReadToEnd();
-                p.WaitForExit(3000);
+                p.WaitForExit(5000);
                 return outStr;
             }
             catch { return string.Empty; }
@@ -6410,7 +6531,7 @@ public static class FileManagerWebApp
                 bannerText.innerHTML = '⚡ <strong>' + data.count + '</strong> match' + (data.count === 1 ? '' : 'es') + ' found across machine for "<strong>' + escapeHtml(query) + '</strong>"';
                 bannerMeta.innerText = (data.engine || 'Spotlight Index') + ' • ' + (data.executionTimeMs || 0) + 'ms';
 
-                currentItems = data.items.map(function(item) {
+                currentItems = (data.items || []).map(function(item) {
                     return {
                         name: item.name,
                         path: item.path,
@@ -6847,7 +6968,7 @@ public static class FileManagerWebApp
             const filtered = currentItems.filter(function(item) {
                 // 1. Hidden Files Filter
                 const isHidden = (item.name && item.name.startsWith('.')) || item.isHidden;
-                if (isHidden && !showHiddenFiles) return false;
+                if (isHidden && !showHiddenFiles && !isAgentSearchResultsActive) return false;
 
                 // 2. Quick Filter Category
                 if (currentQuickFilter !== 'all') {
@@ -6855,8 +6976,8 @@ public static class FileManagerWebApp
                     if (cat !== currentQuickFilter) return false;
                 }
 
-                // 3. Search Query Filter
-                if (q) {
+                // 3. Search Query Filter (Only apply client-side filter in standard folder view; Agent Search results are already matched by system engine)
+                if (q && !isAgentSearchResultsActive) {
                     const matchName = item.name && item.name.toLowerCase().includes(q);
                     const matchPath = item.path && item.path.toLowerCase().includes(q);
                     if (!matchName && !matchPath) return false;
@@ -6959,7 +7080,11 @@ public static class FileManagerWebApp
             }
 
             if (!activeRenderItems || activeRenderItems.length === 0) {
-                container.innerHTML = '<div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px;">No items match this filter or folder is empty</div>';
+                const searchVal = document.getElementById('search') ? document.getElementById('search').value.trim() : '';
+                const emptyMsg = isAgentSearchResultsActive && searchVal
+                    ? '🤖 No matches found on this machine for "<strong>' + escapeHtml(searchVal) + '</strong>"'
+                    : 'No items match this filter or folder is empty';
+                container.innerHTML = '<div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px;">' + emptyMsg + '</div>';
                 updateSelectionState();
                 const statusEl = document.getElementById('status-items-count');
                 if (statusEl) statusEl.innerText = '0 items';
