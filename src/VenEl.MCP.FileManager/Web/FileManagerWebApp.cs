@@ -792,6 +792,145 @@ public static class FileManagerWebApp
             }
         });
 
+        // 11i. AI Context & LLM Token Intelligence Endpoint
+        _app.MapGet("/api/files/ai/context", async (string path) =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                    return Results.BadRequest(new { ok = false, error = "Path is required" });
+
+                if (Directory.Exists(path))
+                {
+                    var dirInfo = new DirectoryInfo(path);
+                    var codeExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+                        ".cs", ".ts", ".js", ".jsx", ".tsx", ".py", ".java", ".go", ".rs", ".cpp", ".c", ".h",
+                        ".html", ".css", ".scss", ".json", ".xml", ".yaml", ".yml", ".md", ".sql", ".sh"
+                    };
+
+                    int totalFiles = 0;
+                    int totalCodeFiles = 0;
+                    long totalBytes = 0;
+                    long totalLines = 0;
+                    var extCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+                    var files = dirInfo.EnumerateFiles("*", new EnumerationOptions { 
+                        RecurseSubdirectories = true, 
+                        MaxRecursionDepth = 5,
+                        IgnoreInaccessible = true 
+                    });
+
+                    foreach (var f in files)
+                    {
+                        if (f.FullName.Contains("/.git/") || f.FullName.Contains("\\.git\\") ||
+                            f.FullName.Contains("/node_modules/") || f.FullName.Contains("\\node_modules\\") ||
+                            f.FullName.Contains("/bin/") || f.FullName.Contains("\\bin\\") ||
+                            f.FullName.Contains("/obj/") || f.FullName.Contains("\\obj\\"))
+                            continue;
+
+                        totalFiles++;
+                        totalBytes += f.Length;
+                        var ext = f.Extension.ToLowerInvariant();
+                        if (!string.IsNullOrEmpty(ext))
+                        {
+                            extCounts[ext] = extCounts.TryGetValue(ext, out var count) ? count + 1 : 1;
+                        }
+
+                        if (codeExtensions.Contains(ext) && f.Length < 1024 * 1024)
+                        {
+                            totalCodeFiles++;
+                            try
+                            {
+                                using var reader = f.OpenText();
+                                while (reader.ReadLine() != null)
+                                {
+                                    totalLines++;
+                                }
+                            }
+                            catch { }
+                        }
+
+                        if (totalFiles >= 500) break;
+                    }
+
+                    long estimatedTokens = Math.Max(1, (long)Math.Ceiling(totalBytes / 3.8));
+
+                    return Results.Ok(new
+                    {
+                        ok = true,
+                        isDirectory = true,
+                        name = dirInfo.Name,
+                        path = dirInfo.FullName,
+                        totalFiles,
+                        totalCodeFiles,
+                        totalBytes,
+                        totalLines,
+                        estimatedTokens,
+                        extensionBreakdown = extCounts
+                    });
+                }
+                else if (File.Exists(path))
+                {
+                    var fileInfo = new FileInfo(path);
+                    var ext = fileInfo.Extension.ToLowerInvariant();
+                    bool isText = true;
+                    string content = "";
+                    long lineCount = 0;
+
+                    if (fileInfo.Length > 5 * 1024 * 1024)
+                    {
+                        isText = false;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            content = await File.ReadAllTextAsync(path);
+                            if (content.IndexOf('\0') >= 0)
+                            {
+                                isText = false;
+                                content = "";
+                            }
+                            else
+                            {
+                                lineCount = content.Split('\n').Length;
+                            }
+                        }
+                        catch
+                        {
+                            isText = false;
+                        }
+                    }
+
+                    long estimatedTokens = isText ? Math.Max(1, (long)Math.Ceiling(content.Length / 3.8)) : 0;
+                    string snippet = isText && content.Length > 2000 ? content.Substring(0, 2000) + "\n... (truncated)" : content;
+
+                    return Results.Ok(new
+                    {
+                        ok = true,
+                        isDirectory = false,
+                        name = fileInfo.Name,
+                        path = fileInfo.FullName,
+                        size = fileInfo.Length,
+                        extension = ext,
+                        isText,
+                        lineCount,
+                        estimatedTokens,
+                        snippet,
+                        content = isText && fileInfo.Length < 500 * 1024 ? content : snippet
+                    });
+                }
+                else
+                {
+                    return Results.NotFound(new { ok = false, error = "Path does not exist." });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { ok = false, error = ex.Message });
+            }
+        });
+
         // 12. UI Dashboard & Static Assets
         _app.MapGet("/", () => ServeStaticFile("index.html", "text/html; charset=utf-8"));
         _app.MapGet("/index.html", () => ServeStaticFile("index.html", "text/html; charset=utf-8"));
