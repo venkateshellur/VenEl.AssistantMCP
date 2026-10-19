@@ -18,6 +18,7 @@ namespace VenEl.MCP.FileManager.Web;
 
 public record NewFolderRequest(string CurrentPath, string FolderName);
 public record NewFileRequest(string CurrentPath, string FileName, string? Content);
+public record SaveFileRequest(string? FilePath, string? Path, string? Content);
 public record RenameRequest(string OldPath, string NewName);
 public record DeleteRequest(string? TargetPath, string? Path, List<string>? Paths);
 public record CopyMoveRequest(string Source, string DestinationDir);
@@ -98,6 +99,13 @@ public static class FileManagerWebApp
             {
                 return Results.BadRequest(ex.Message);
             }
+        });
+
+        // 2b. Download File
+        _app.MapGet("/api/files/download", (string path) =>
+        {
+            if (!File.Exists(path)) return Results.NotFound("File not found.");
+            return Results.File(path, "application/octet-stream", Path.GetFileName(path));
         });
 
         // 3. Raw File Stream
@@ -198,6 +206,16 @@ public static class FileManagerWebApp
             if (string.IsNullOrWhiteSpace(req.CurrentPath) || string.IsNullOrWhiteSpace(req.FileName))
                 return Results.BadRequest("CurrentPath and FileName are required.");
             var target = Path.Combine(req.CurrentPath, req.FileName);
+            await File.WriteAllTextAsync(target, req.Content ?? "");
+            return Results.Ok(new { success = true, path = target });
+        });
+
+        // 6b. Save File (In-line Quick Editor)
+        _app.MapPost("/api/files/saveFile", async (SaveFileRequest req) =>
+        {
+            var target = req.FilePath ?? req.Path;
+            if (string.IsNullOrWhiteSpace(target))
+                return Results.BadRequest("Path is required.");
             await File.WriteAllTextAsync(target, req.Content ?? "");
             return Results.Ok(new { success = true, path = target });
         });
