@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using VenEl.MCP.FileManager.Configuration;
+using VenEl.MCP.FileManager.Sftp;
 
 namespace VenEl.MCP.FileManager.Web;
 
@@ -27,10 +28,12 @@ public record BatchRenameRequest(string CurrentPath, List<BatchRenameItem> Renam
 public record CompressRequest(string? CurrentPath, string? Folder, List<string>? Items, string? ArchiveName);
 public record ExtractRequest(string? ArchivePath, string? DestinationDir, string? Folder, string? ArchiveName, string? DestinationFolder);
 public record ExportProjectRequest(string Path, string? DestinationDir);
+public record DisconnectSftpRequest(string ConnectionId);
 
 public static class FileManagerWebApp
 {
     private static WebApplication? _app;
+    private static readonly ISftpSessionManager _sftp = new SftpSessionManager();
 
     public static async Task StartAsync(FileManagerOptions options, CancellationToken ct = default)
     {
@@ -946,6 +949,188 @@ public static class FileManagerWebApp
             catch (Exception ex)
             {
                 return Results.Ok(new { ok = false, error = ex.Message });
+            }
+        });
+
+        // ══════════════════════════════════════════════════════════
+        // 🌐 SFTP REMOTE ENDPOINTS
+        // ══════════════════════════════════════════════════════════
+
+        // 11a. Test SFTP Connection
+        _app.MapPost("/api/sftp/test", async (SftpConnectRequest req, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var result = await _sftp.TestConnectionAsync(req, cancellationToken);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new SftpTestResult(false, ex.Message, null, null));
+            }
+        });
+
+        // 11b. Connect to SFTP Server
+        _app.MapPost("/api/sftp/connect", async (SftpConnectRequest req, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var result = await _sftp.ConnectAsync(req, cancellationToken);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new SftpConnectResult(false, null, ex.Message, null, null, null));
+            }
+        });
+
+        // 11c. Disconnect Active SFTP Session
+        _app.MapPost("/api/sftp/disconnect", async (DisconnectSftpRequest req) =>
+        {
+            var disconnected = await _sftp.DisconnectAsync(req.ConnectionId);
+            return Results.Ok(new { success = disconnected });
+        });
+
+        // 11d. Active SFTP Sessions
+        _app.MapGet("/api/sftp/sessions", () =>
+        {
+            return Results.Ok(_sftp.GetActiveSessions());
+        });
+
+        // 11e. List Remote Directory
+        _app.MapGet("/api/sftp/list", async (string connectionId, string? path, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var result = await _sftp.ListDirectoryAsync(connectionId, path, cancellationToken);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // 11f. Read Remote File Text (for In-Line Editor & Quick Look)
+        _app.MapGet("/api/sftp/read", async (string connectionId, string path, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var content = await _sftp.ReadFileTextAsync(connectionId, path, cancellationToken);
+                return Results.Content(content, "text/plain; charset=utf-8");
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // 11g. Download Remote File
+        _app.MapGet("/api/sftp/download", async (string connectionId, string path, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var bytes = await _sftp.ReadFileBytesAsync(connectionId, path, cancellationToken);
+                var fileName = Path.GetFileName(path.Replace('\\', '/'));
+                return Results.File(bytes, "application/octet-stream", fileName);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // 11h. Save Remote File Text
+        _app.MapPost("/api/sftp/save", async (SftpSaveFileRequest req, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await _sftp.SaveFileTextAsync(req.ConnectionId, req.RemotePath, req.Content, cancellationToken);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // 11i. Create Remote Folder
+        _app.MapPost("/api/sftp/newFolder", async (SftpNewFolderRequest req, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await _sftp.CreateDirectoryAsync(req.ConnectionId, req.CurrentPath, req.FolderName, cancellationToken);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // 11j. Create Remote File
+        _app.MapPost("/api/sftp/newFile", async (SftpNewFileRequest req, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await _sftp.CreateFileAsync(req.ConnectionId, req.CurrentPath, req.FileName, req.Content, cancellationToken);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // 11k. Rename Remote File or Directory
+        _app.MapPost("/api/sftp/rename", async (SftpRenameRequest req, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await _sftp.RenameAsync(req.ConnectionId, req.OldPath, req.NewName, cancellationToken);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // 11l. Delete Remote Item
+        _app.MapPost("/api/sftp/delete", async (SftpDeleteRequest req, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await _sftp.DeleteAsync(req.ConnectionId, req.TargetPath, req.IsDirectory, cancellationToken);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // 11m. Upload File to SFTP
+        _app.MapPost("/api/sftp/upload", async (HttpRequest httpRequest, string connectionId, string remotePath, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                if (!httpRequest.HasFormContentType || httpRequest.Form.Files.Count == 0)
+                {
+                    using var stream = httpRequest.Body;
+                    await _sftp.UploadFileAsync(connectionId, remotePath, stream, cancellationToken);
+                }
+                else
+                {
+                    var file = httpRequest.Form.Files[0];
+                    using var stream = file.OpenReadStream();
+                    await _sftp.UploadFileAsync(connectionId, remotePath, stream, cancellationToken);
+                }
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
             }
         });
 
