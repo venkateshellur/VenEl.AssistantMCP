@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VenEl File Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Click-Catching Dim Backdrop for Folder Dropdown -->
+    <div id="path-dropdown-backdrop" class="dropdown-backdrop" onclick="closePathDropdown(event)" style="display: none;"></div>
+
+    <!-- Multi-Tab Strip (Browser / Windows 11 Explorer Style) -->
+    <div id="tabs-bar" class="tabs-bar">
+        <div id="tabs-container" class="tabs-container"></div>
+        <button id="btn-new-tab" class="btn-new-tab" onclick="addNewTab()" title="Open New Tab (Ctrl+T / Cmd+T)">
+            <span style="font-size: 15px; font-weight: bold; line-height: 1;">+</span>
+            <span class="tab-shortcut-badge" id="badge-tab-shortcut">⌘T</span>
+        </button>
+    </div>
+
+    <!-- Top Address & Navigation Bar (Windows / Mac Style) -->
+    <header>
+        <div class="nav-buttons">
+            <button id="btn-back" onclick="goBack()" disabled title="Back (Alt+Left)">⬅</button>
+            <button id="btn-forward" onclick="goForward()" disabled title="Forward (Alt+Right)">➡</button>
+            <button id="btn-up" onclick="goUp()" title="Up One Level (Alt+Up)">⬆</button>
+            <button id="btn-home" onclick="goHome()" title="Home Folder">🏠</button>
+            <button id="btn-reload" onclick="refreshCurrentFolder()" title="Reload / Refresh (⌘R / F5)">🔄</button>
+        </div>
+        <div class="path-bar-container">
+            <div class="path-bar" id="path-bar-box" onclick="handlePathBarClick(event)">
+                <div class="path-breadcrumbs" id="path-breadcrumbs"></div>
+                <input type="text" id="path" onkeypress="handlePathEnter(event)" onblur="exitPathEditMode()" style="display: none;" placeholder="Type path and press Enter..." autocomplete="off" />
+                <button id="btn-path-dropdown" onclick="togglePathDropdown(event)" title="Browse drives and folders">▾</button>
+            </div>
+            <!-- Collapsed Window Title (Visual Studio Zen Mode) -->
+            <div class="compact-window-title" id="compact-window-title" onclick="expandPathFromCompactTitle(event)" style="display: none;">
+                <span class="compact-title-icon">📁</span>
+                <span class="compact-title-text" id="compact-title-text">VenEl File Manager</span>
+                <span class="compact-title-badge">Zen</span>
+            </div>
+            <div id="path-dropdown" class="path-dropdown" onclick="event.stopPropagation()" style="display: none;"></div>
+        </div>
+        <div class="nav-buttons view-toggles" style="position: relative;">
+            <button id="btn-view-dropdown" class="tool-btn view-dropdown-btn" onclick="toggleViewMenu(event)" title="Change layout view">
+                <span id="current-view-icon">⊞</span> <span id="current-view-label">Grid</span> <span style="font-size: 8px; opacity: 0.7; margin-left: 2px;">▾</span>
+            </button>
+            <button id="btn-toggle-compact" onclick="toggleCompactBars()" class="tool-btn" title="Collapse Menus & Toolbars (Ctrl+F1 / ⌘⌥T)" style="font-size: 13px; padding: 5px 8px; font-weight: bold; color: #a29bfe;">⌃</button>
+
+            <!-- Unified View Dropdown Menu -->
+            <div id="view-dropdown-menu" class="view-dropdown-menu" onclick="event.stopPropagation()" style="display: none;">
+                <div class="view-menu-item" id="opt-details" onclick="setView('details')">
+                    <span class="view-menu-icon">📑</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">Details</span>
+                        <span class="view-menu-desc">Multi-column sortable table</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+                <div class="view-menu-item" id="opt-list" onclick="setView('list')">
+                    <span class="view-menu-icon">☰</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">List</span>
+                        <span class="view-menu-desc">Clean compact list</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+                <div class="view-menu-item active" id="opt-grid" onclick="setView('grid')">
+                    <span class="view-menu-icon">⊞</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">Grid / Medium Icons</span>
+                        <span class="view-menu-desc">Standard card tiles</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+                <div class="view-menu-item" id="opt-large" onclick="setView('large')">
+                    <span class="view-menu-icon">🖼️</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">Large Icons</span>
+                        <span class="view-menu-desc">High-res previews & thumbnails</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+                <div class="view-menu-item" id="opt-compact" onclick="setView('compact')">
+                    <span class="view-menu-icon">🗂️</span>
+                    <div class="view-menu-text">
+                        <span class="view-menu-title">Small Icons / Compact</span>
+                        <span class="view-menu-desc">High-density mini rows</span>
+                    </div>
+                    <span class="view-menu-check">✓</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Bookmarks / Favorites Quick-Access Bar -->
+    <div id="bookmarks-bar" class="bookmarks-bar">
+        <div class="bookmarks-label">
+            <span>⭐ Pinned:</span>
+        </div>
+        <div id="bookmarks-chips" class="bookmarks-chips"></div>
+        <button class="btn-pin-current" id="btn-pin-current" onclick="togglePinCurrentFolder()" title="Pin/Unpin current folder to Favorites">
+            <span id="pin-star-icon">☆</span> <span id="pin-star-label">Pin Folder</span>
+        </button>
+    </div>
+
+    <!-- Desktop-Class Menu Bar & Action Toolbar (macOS Finder / Windows Explorer Style) -->
+    <div class="toolbar" id="main-toolbar">
+        <div class="toolbar-group menubar-wrapper">
+            <nav class="app-menubar" id="app-menubar" role="menubar" aria-label="Application Menu Bar">
+                <!-- File Menu -->
+                <div class="menubar-item" id="menu-file">
+                    <button class="menubar-trigger" onclick="toggleMenuBar('file', event)" onmouseenter="handleMenuHover('file')">
+                        File
+                    </button>
+                    <div class="menubar-dropdown" id="dropdown-file" onclick="event.stopPropagation()">
+                        <div class="menu-entry" onclick="menuAction(showNewFolderModal)">
+                            <span class="menu-icon">📁</span>
+                            <span class="menu-label">New Folder...</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⇧N" data-shortcut-win="Ctrl+Shift+N">⌘⇧N</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(showNewFileModal)">
+                            <span class="menu-icon">📄</span>
+                            <span class="menu-label">New File...</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘N" data-shortcut-win="Ctrl+N">⌘N</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" id="menu-item-open-editor" onclick="menuAction(openSelectedFileInEditor)">
+                            <span class="menu-icon">🚀</span>
+                            <span class="menu-label">Open in VS Code Editor</span>
+                            <span class="menu-shortcut">Enter</span>
+                        </div>
+                        <div class="menu-entry" id="menu-item-quicklook" onclick="menuAction(toggleQuickLook)">
+                            <span class="menu-icon">👁️</span>
+                            <span class="menu-label">Quick Look Preview</span>
+                            <span class="menu-shortcut">Space</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(openTerminalAtCurrent)">
+                            <span class="menu-icon">💻</span>
+                            <span class="menu-label">Open in Integrated Terminal</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" id="menu-item-properties" onclick="menuAction(showPropertiesModal)">
+                            <span class="menu-icon">ℹ️</span>
+                            <span class="menu-label">Get Info / Properties</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘I" data-shortcut-win="Alt+Enter">⌘I</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" onclick="menuAction(refreshCurrentFolder)">
+                            <span class="menu-icon">🔄</span>
+                            <span class="menu-label">Refresh View</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘R" data-shortcut-win="F5">⌘R</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(openSettingsModal)">
+                            <span class="menu-icon">⚙️</span>
+                            <span class="menu-label">Settings & Preferences...</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘," data-shortcut-win="Ctrl+,">⌘,</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Edit Menu -->
+                <div class="menubar-item" id="menu-edit">
+                    <button class="menubar-trigger" onclick="toggleMenuBar('edit', event)" onmouseenter="handleMenuHover('edit')">
+                        Edit
+                    </button>
+                    <div class="menubar-dropdown" id="dropdown-edit" onclick="event.stopPropagation()">
+                        <div class="menu-entry" id="menu-item-cut" onclick="menuAction(cutSelectedItem)">
+                            <span class="menu-icon">✂️</span>
+                            <span class="menu-label">Cut</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘X" data-shortcut-win="Ctrl+X">⌘X</span>
+                        </div>
+                        <div class="menu-entry" id="menu-item-copy" onclick="menuAction(copySelectedItem)">
+                            <span class="menu-icon">📋</span>
+                            <span class="menu-label">Copy</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘C" data-shortcut-win="Ctrl+C">⌘C</span>
+                        </div>
+                        <div class="menu-entry" id="menu-item-paste" onclick="menuAction(pasteClipboardItem)">
+                            <span class="menu-icon">📥</span>
+                            <span class="menu-label">Paste</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘V" data-shortcut-win="Ctrl+V">⌘V</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" id="menu-item-rename" onclick="menuAction(renameSelectedItem)">
+                            <span class="menu-icon">✏️</span>
+                            <span class="menu-label">Rename...</span>
+                            <span class="menu-shortcut">F2</span>
+                        </div>
+                        <div class="menu-entry" id="menu-item-batch-rename" onclick="menuAction(showBatchRenameModal)">
+                            <span class="menu-icon">🏷️</span>
+                            <span class="menu-label">Batch Rename...</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⇧R" data-shortcut-win="Ctrl+Shift+R">⌘⇧R</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" onclick="menuAction(selectAllItems)">
+                            <span class="menu-icon">☑️</span>
+                            <span class="menu-label">Select All</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘A" data-shortcut-win="Ctrl+A">⌘A</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(invertSelection)">
+                            <span class="menu-icon">🔄</span>
+                            <span class="menu-label">Invert Selection</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry danger" id="menu-item-delete" onclick="menuAction(deleteSelectedItem)">
+                            <span class="menu-icon">🗑️</span>
+                            <span class="menu-label">Move to Trash</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⌫" data-shortcut-win="Del">⌘⌫</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View Menu -->
+                <div class="menubar-item" id="menu-view">
+                    <button class="menubar-trigger" onclick="toggleMenuBar('view', event)" onmouseenter="handleMenuHover('view')">
+                        View
+                    </button>
+                    <div class="menubar-dropdown" id="dropdown-view" onclick="event.stopPropagation()">
+                        <div class="menu-entry" onclick="menuAction(function() { setView('grid'); })">
+                            <span class="menu-check" id="menu-chk-grid">✓</span>
+                            <span class="menu-icon">⊞</span>
+                            <span class="menu-label">Grid / Medium Icons</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { setView('details'); })">
+                            <span class="menu-check" id="menu-chk-details"></span>
+                            <span class="menu-icon">📑</span>
+                            <span class="menu-label">Details Table</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { setView('list'); })">
+                            <span class="menu-check" id="menu-chk-list"></span>
+                            <span class="menu-icon">☰</span>
+                            <span class="menu-label">List View</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { setView('large'); })">
+                            <span class="menu-check" id="menu-chk-large"></span>
+                            <span class="menu-icon">🖼️</span>
+                            <span class="menu-label">Large Icons</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { setView('compact'); })">
+                            <span class="menu-check" id="menu-chk-compact"></span>
+                            <span class="menu-icon">🗂️</span>
+                            <span class="menu-label">Small Icons / Compact</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" onclick="menuAction(togglePreview)">
+                            <span class="menu-check" id="menu-chk-preview">✓</span>
+                            <span class="menu-icon">👁️</span>
+                            <span class="menu-label">Show Preview Pane</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⇧P" data-shortcut-win="Alt+P">⌘⇧P</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(toggleSidebarRail)">
+                            <span class="menu-check" id="menu-chk-sidebar">✓</span>
+                            <span class="menu-icon">🧭</span>
+                            <span class="menu-label">Show Places Panel</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⇧B" data-shortcut-win="Alt+B">⌘⇧B</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(toggleBookmarksBar)">
+                            <span class="menu-check" id="menu-chk-bookmarks">✓</span>
+                            <span class="menu-icon">⭐</span>
+                            <span class="menu-label">Show Pinned Favorites Bar</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(toggleQuickFilterBar)">
+                            <span class="menu-check" id="menu-chk-quick-filter">✓</span>
+                            <span class="menu-icon">🏷️</span>
+                            <span class="menu-label">Show File Type Filter Bar</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(toggleCompactBars)">
+                            <span class="menu-check" id="menu-chk-compact-bars"></span>
+                            <span class="menu-icon">🗜️</span>
+                            <span class="menu-label">Compact Bars / Title View</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⌥T" data-shortcut-win="Ctrl+F1">Ctrl+F1</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(toggleShowHiddenFiles)">
+                            <span class="menu-check" id="menu-chk-hidden"></span>
+                            <span class="menu-icon">👁️‍🗨️</span>
+                            <span class="menu-label">Show Hidden Files</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⇧." data-shortcut-win="Ctrl+H">⌘⇧.</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" onclick="menuAction(function() { handleSort('name'); })">
+                            <span class="menu-check" id="menu-chk-sort-name"></span>
+                            <span class="menu-icon">🔤</span>
+                            <span class="menu-label">Sort by Name</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { handleSort('size'); })">
+                            <span class="menu-check" id="menu-chk-sort-size"></span>
+                            <span class="menu-icon">⚖️</span>
+                            <span class="menu-label">Sort by Size</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { handleSort('modified'); })">
+                            <span class="menu-check" id="menu-chk-sort-modified"></span>
+                            <span class="menu-icon">📅</span>
+                            <span class="menu-label">Sort by Date Modified</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { handleSort('type'); })">
+                            <span class="menu-check" id="menu-chk-sort-type"></span>
+                            <span class="menu-icon">🏷️</span>
+                            <span class="menu-label">Sort by Type</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions / Tools Menu -->
+                <div class="menubar-item" id="menu-actions">
+                    <button class="menubar-trigger" onclick="toggleMenuBar('actions', event)" onmouseenter="handleMenuHover('actions')">
+                        Actions
+                    </button>
+                    <div class="menubar-dropdown" id="dropdown-actions" onclick="event.stopPropagation()">
+                        <div class="menu-entry" id="menu-item-zip" onclick="menuAction(handleCompressSelected)">
+                            <span class="menu-icon">🗜️</span>
+                            <span class="menu-label">Compress to .zip Archive</span>
+                        </div>
+                        <div class="menu-entry" id="menu-item-unzip" onclick="menuAction(function() { handleExtractSelected(false); })">
+                            <span class="menu-icon">📦</span>
+                            <span class="menu-label">Extract Archive (Unzip)...</span>
+                        </div>
+                        <div class="menu-entry" id="menu-item-diff" onclick="menuAction(diffSelectedPair)">
+                            <span class="menu-icon">⚖️</span>
+                            <span class="menu-label">Compare 2 Selected Files (Diff)...</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" id="menu-item-decompile" onclick="menuAction(triggerSelectedDecompile)">
+                            <span class="menu-icon">🔬</span>
+                            <span class="menu-label">Inspect Binary / Decompile...</span>
+                        </div>
+                        <div class="menu-entry" id="menu-item-export" onclick="menuAction(triggerSelectedExport)">
+                            <span class="menu-icon">📦</span>
+                            <span class="menu-label">Export Decompiled C# Project...</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" onclick="menuAction(function() { copyPathToClipboard(false); })">
+                            <span class="menu-icon">🔗</span>
+                            <span class="menu-label">Copy Full Path</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌥⌘C" data-shortcut-win="Ctrl+Alt+C">⌥⌘C</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { copyPathToClipboard(true); })">
+                            <span class="menu-icon">📎</span>
+                            <span class="menu-label">Copy Relative Path</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Go Menu -->
+                <div class="menubar-item" id="menu-go">
+                    <button class="menubar-trigger" onclick="toggleMenuBar('go', event)" onmouseenter="handleMenuHover('go')">
+                        Go
+                    </button>
+                    <div class="menubar-dropdown" id="dropdown-go" onclick="event.stopPropagation()">
+                        <div class="menu-entry" id="menu-go-back" onclick="menuAction(goBack)">
+                            <span class="menu-icon">⬅️</span>
+                            <span class="menu-label">Back</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘[" data-shortcut-win="Alt+←">⌘[</span>
+                        </div>
+                        <div class="menu-entry" id="menu-go-forward" onclick="menuAction(goForward)">
+                            <span class="menu-icon">➡️</span>
+                            <span class="menu-label">Forward</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘]" data-shortcut-win="Alt+→">⌘]</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(goUp)">
+                            <span class="menu-icon">⬆️</span>
+                            <span class="menu-label">Enclosing Folder</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘↑" data-shortcut-win="Alt+↑">⌘↑</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" onclick="menuAction(goHome)">
+                            <span class="menu-icon">🏠</span>
+                            <span class="menu-label">Home Folder</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⇧H" data-shortcut-win="Alt+Home">⌘⇧H</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { quickNav('Desktop'); })">
+                            <span class="menu-icon">🖥️</span>
+                            <span class="menu-label">Desktop</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⇧D" data-shortcut-win="Ctrl+D">⌘⇧D</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { quickNav('Documents'); })">
+                            <span class="menu-icon">📄</span>
+                            <span class="menu-label">Documents</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘⇧O" data-shortcut-win="Ctrl+O">⌘⇧O</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { quickNav('Downloads'); })">
+                            <span class="menu-icon">⬇️</span>
+                            <span class="menu-label">Downloads</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌥⌘L" data-shortcut-win="Ctrl+J">⌥⌘L</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" onclick="menuAction(addNewTab)">
+                            <span class="menu-icon">🗂️</span>
+                            <span class="menu-label">New Tab</span>
+                            <span class="menu-shortcut" data-shortcut-mac="⌘T" data-shortcut-win="Ctrl+T">⌘T</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Menu -->
+                <div class="menubar-item" id="menu-help">
+                    <button class="menubar-trigger" onclick="toggleMenuBar('help', event)" onmouseenter="handleMenuHover('help')">
+                        Help
+                    </button>
+                    <div class="menubar-dropdown" id="dropdown-help" onclick="event.stopPropagation()">
+                        <div class="menu-entry" onclick="menuAction(function() { openHelpModal('shortcuts'); })">
+                            <span class="menu-icon">⌨️</span>
+                            <span class="menu-label">Keyboard Shortcuts Guide</span>
+                            <span class="menu-shortcut">?</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { openHelpModal('features'); })">
+                            <span class="menu-icon">📖</span>
+                            <span class="menu-label">Power Features Cheatsheet</span>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-entry" onclick="menuAction(openSettingsModal)">
+                            <span class="menu-icon">⚡</span>
+                            <span class="menu-label">VenEl Engine Status</span>
+                        </div>
+                        <div class="menu-entry" onclick="menuAction(function() { openHelpModal('features'); })">
+                            <span class="menu-icon">ℹ️</span>
+                            <span class="menu-label">About VenEl File Manager</span>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Legacy Buttons (Hidden container to ensure full backward compatibility for DOM lookups) -->
+            <div style="display: none;" aria-hidden="true">
+                <button id="btn-cut" onclick="cutSelectedItem()"></button>
+                <button id="btn-copy" onclick="copySelectedItem()"></button>
+                <button id="btn-paste" onclick="pasteClipboardItem()"></button>
+                <button id="btn-rename" onclick="renameSelectedItem()"></button>
+                <button id="btn-delete" onclick="deleteSelectedItem()"></button>
+                <button id="btn-batch-rename" onclick="showBatchRenameModal()"></button>
+                <button id="btn-zip-archive" onclick="handleCompressSelected()"></button>
+                <button id="btn-unzip-archive" onclick="handleExtractSelected(false)"></button>
+                <button id="btn-diff-compare" onclick="diffSelectedPair()"></button>
+                <button id="btn-terminal" onclick="openTerminalAtCurrent()"></button>
+                <button id="btn-properties" onclick="showPropertiesModal()"></button>
+            </div>
+        </div>
+
+        <div class="toolbar-group toolbar-search-group">
+            <button class="search-scope-pill" id="search-scope-pill" onclick="toggleSearchScope()" title="Switch search scope: Folder vs ⚡ Machine (Agent)">
+                <span id="scope-icon">📁</span> <span id="scope-label">Folder</span> <span class="scope-arrow">▾</span>
+            </button>
+            <div class="search-input-box">
+                <input type="text" id="search" class="search-input" placeholder="Filter folder... (or switch to ⚡ Machine)" onkeyup="handleSearchInput(event)" onkeydown="handleSearchKey(event)" autocomplete="off" />
+                <button id="search-clear-btn" class="search-clear-btn" onclick="clearSearch()" style="display: none;" title="Clear Search">✕</button>
+            </div>
+            <button id="btn-agent-search-action" class="tool-btn agent-search-action" onclick="handleSearchActionClick()" title="Filter current folder">
+                <i>🔍</i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Filter Bar (File Types & Hidden Files) -->
+    <div id="quick-filter-bar" class="quick-filter-bar" role="toolbar" aria-label="Filter by file type">
+        <div class="quick-filter-chips">
+            <button class="filter-chip active" id="filter-chip-all" onclick="setQuickFilter('all')" title="Show All Items">
+                <span class="chip-label">All</span>
+                <span class="chip-count" id="count-all">0</span>
+            </button>
+            <button class="filter-chip" id="filter-chip-folders" onclick="setQuickFilter('folders')" title="Filter by Folders">
+                <span class="chip-icon">📁</span>
+                <span class="chip-label">Folders</span>
+                <span class="chip-count" id="count-folders">0</span>
+            </button>
+            <button class="filter-chip" id="filter-chip-code" onclick="setQuickFilter('code')" title="Filter by Code & Scripts">
+                <span class="chip-icon">⚡</span>
+                <span class="chip-label">Code</span>
+                <span class="chip-count" id="count-code">0</span>
+            </button>
+            <button class="filter-chip" id="filter-chip-documents" onclick="setQuickFilter('documents')" title="Filter by Documents">
+                <span class="chip-icon">📄</span>
+                <span class="chip-label">Docs</span>
+                <span class="chip-count" id="count-documents">0</span>
+            </button>
+            <button class="filter-chip" id="filter-chip-images" onclick="setQuickFilter('images')" title="Filter by Images & Media">
+                <span class="chip-icon">🖼️</span>
+                <span class="chip-label">Media</span>
+                <span class="chip-count" id="count-images">0</span>
+            </button>
+            <button class="filter-chip" id="filter-chip-archives" onclick="setQuickFilter('archives')" title="Filter by Archives & Zips">
+                <span class="chip-icon">🗜️</span>
+                <span class="chip-label">Archives</span>
+                <span class="chip-count" id="count-archives">0</span>
+            </button>
+        </div>
+        <div class="quick-filter-right">
+            <button class="toggle-hidden-btn" id="btn-toggle-hidden" onclick="toggleShowHiddenFiles()" title="Toggle Hidden Files (⌘⇧. / Ctrl+H)">
+                <span class="hidden-icon" id="hidden-files-icon">👁️‍🗨️</span>
+                <span class="hidden-label" id="hidden-files-label">Hidden: Off</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Explorer Area -->
+    <div class="main-content">
+        <!-- Visual Studio Auto-Hide Left Dock Margin Strip (shows vertical tabs for collapsed left panels) -->
+        <div class="dock-margin-strip" id="dock-margin-strip" style="display: none;">
+            <button class="dock-tab" id="dock-tab-favorites" onclick="toggleSidebarRail()" title="Expand Places Panel (⌘⇧B / Alt+B)" style="display: none;">
+                <span class="dock-tab-icon">🧭</span>
+                <span class="dock-tab-text">Places</span>
+            </button>
+        </div>
+
+        <!-- Collapsible Left Places Sidebar (Favorites, Drives & Volumes, Network / FTP) -->
+        <aside class="quick-access-sidebar" id="quick-access-sidebar">
+            <div class="sidebar-header-row" style="display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 6px; border-bottom: 1px solid var(--border-color); margin-bottom: 8px;">
+                <span class="sidebar-group-title" style="margin: 0; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px; color: var(--text-main); padding: 0 4px;">🧭 Places</span>
+                <button class="sidebar-collapse-chevron" onclick="toggleSidebarRail()" title="Auto-Hide / Collapse Places to Left Margin (❮)">❮</button>
+            </div>
+            <div class="sidebar-group-title" style="margin-top: 2px;">
+                <span>Favorites</span>
+            </div>
+            <div id="quick-favorites">
+                <div class="quick-item" onclick="goHome()">
+                    <i>🏠</i> <span>Home</span>
+                </div>
+                <div class="quick-item" id="fav-desktop" onclick="quickNav('Desktop')">
+                    <i>🖥️</i> <span>Desktop</span>
+                </div>
+                <div class="quick-item" id="fav-documents" onclick="quickNav('Documents')">
+                    <i>📁</i> <span>Documents</span>
+                </div>
+                <div class="quick-item" id="fav-downloads" onclick="quickNav('Downloads')">
+                    <i>📥</i> <span>Downloads</span>
+                </div>
+            </div>
+
+            <div class="sidebar-group-title" style="margin-top: 10px;">
+                <span>Drives & Volumes</span>
+            </div>
+            <div id="quick-drives"></div>
+        </aside>
+
+        <!-- Draggable Sidebar Resizer Handle -->
+        <div class="resizer-handle" id="sidebar-resizer" title="Drag to resize sidebar (Double-click to reset)"></div>
+
+        <!-- Center Explorer Content -->
+        <div class="file-list-container" id="file-list-container" onclick="handleContainerClick(event)" oncontextmenu="handleBackgroundContextMenu(event)">
+            <!-- Agent Search Results Banner -->
+            <div id="search-results-banner" class="search-results-banner" style="display: none;">
+                <div class="search-banner-info">
+                    <span class="search-banner-icon">⚡</span>
+                    <span id="search-banner-text" style="font-weight: 600;">Machine Search Results</span>
+                    <span id="search-banner-meta" class="search-banner-meta">Spotlight Index</span>
+                </div>
+                <button class="search-banner-close" onclick="exitAgentSearch()" title="Exit search and return to folder">✕ Exit Search</button>
+            </div>
+
+            <!-- List View Header (Visible only in List Mode) -->
+            <div id="list-header" class="list-header" style="display: none;">
+                <div></div>
+                <div class="col-sortable" onclick="handleSort('name')">Name <span id="sort-name-icon">▲</span></div>
+                <div class="col-sortable" onclick="handleSort('modified')">Date Modified <span id="sort-modified-icon"></span></div>
+                <div class="col-sortable" onclick="handleSort('type')">Type <span id="sort-type-icon"></span></div>
+                <div class="col-sortable" onclick="handleSort('size')" style="justify-content: flex-end;">Size <span id="sort-size-icon"></span></div>
+            </div>
+
+            <div id="files" class="grid-view">
+                <div id="initial-loader" style="grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center;">
+                    <div style="width: 34px; height: 34px; border: 3px solid rgba(108, 92, 231, 0.2); border-top-color: #6c5ce7; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 14px;"></div>
+                    <div style="font-size: 14px; font-weight: 600; color: #f1f2f6; margin-bottom: 6px;">Loading files & drives...</div>
+                    <div style="font-size: 11px; color: #888899; max-width: 360px; line-height: 1.5;">First launch takes a few moments while the engine initializes routes and indexes drives. Subsequent loads are instant!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Draggable Preview Resizer Handle -->
+        <div class="resizer-handle" id="preview-resizer" title="Drag to resize preview pane (Double-click to reset)"></div>
+
+        <!-- Right Preview Pane (Dockable Visual Studio Panel) -->
+        <aside class="preview-pane" id="preview-pane">
+            <div class="sidebar-header-row preview-header-row" style="display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 6px; border-bottom: 1px solid var(--border-color); margin-bottom: 8px;">
+                <h2 style="margin: 0; padding: 0; border: none; font-size: 13px; display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px;">
+                    <span id="preview-header-title">Preview</span>
+                </h2>
+                <button class="sidebar-collapse-chevron" onclick="togglePreview()" title="Auto-Hide / Collapse Preview to Right Margin (❯)">❯</button>
+            </div>
+            <div class="preview-content" id="preview-content">
+                Select a file to preview.<br><br>💡 Tap <strong>Spacebar</strong> for Quick Look or double-click to open in VS Code!
+            </div>
+        </aside>
+
+        <!-- Visual Studio Auto-Hide Right Dock Margin Strip (shows vertical tabs for collapsed right panels) -->
+        <div class="dock-margin-strip dock-margin-strip-right" id="dock-margin-strip-right" style="display: none;">
+            <button class="dock-tab" id="dock-tab-preview" onclick="togglePreview()" title="Expand File Preview Pane (⌘⇧P / Alt+P)" style="display: none;">
+                <span class="dock-tab-icon">👁️</span>
+                <span class="dock-tab-text">Preview</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Bottom Status Bar -->
+    <div class="status-bar">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <span id="status-items-count">0 items</span>
+            <span id="status-selected-info">No selection</span>
+            <div id="status-git-branch" class="status-git-branch" onclick="refreshGitStatus()" style="display: none;" title="Current Git Branch & Sync Status (Click to refresh)">
+                <span style="font-size: 13px;"></span>
+                <span id="git-branch-name" style="font-weight: 600;">main</span>
+                <span id="git-sync-status" style="font-size: 10px; opacity: 0.85;"></span>
+            </div>
+            <button class="status-help-hint" onclick="openHelpModal('shortcuts')" title="View Feature Guide & Keyboard Shortcuts (Press ?)">
+                <span>❓ Guide (?)</span>
+            </button>
+            <button class="status-help-hint" onclick="openSettingsModal()" title="VenEl Settings & Engine Status (⌘, / Ctrl+,)">
+                <span>⚙️ Settings</span>
+            </button>
+            <div style="display: flex; align-items: center; gap: 6px; margin-left: 6px;">
+                <button class="status-help-hint" onclick="toggleSidebarRail()" title="Toggle Places Panel (⌘⇧B / Alt+B)">🧭 Places</button>
+                <button class="status-help-hint" onclick="togglePreview()" title="Toggle Preview Pane (⌘⇧P / Alt+P)">👁️ Preview</button>
+                <button class="status-help-hint" onclick="toggleCompactBars()" title="Toggle Compact Mode (Ctrl+F1 / ⌘⌥T)">🗜️ Compact</button>
+            </div>
+        </div>
+        <span style="margin-left: auto; opacity: 0.85; font-size: 11px;">
+            VenEl File Manager &bull; <a href="https://www.linkedin.com/in/venkateshellur/" target="_blank" style="color: inherit; text-decoration: underline; text-underline-offset: 2px;">Venkatesh Ellur</a>
+        </span>
+    </div>
+
+    <!-- Rich Floating Glassmorphic Hover Card (Tooltip) -->
+    <div id="file-hover-card" class="file-hover-card" style="display: none;">
+        <div class="hover-card-header">
+            <span class="hover-card-icon" id="hover-card-icon">📄</span>
+            <div class="hover-card-title-col">
+                <div class="hover-card-name" id="hover-card-name">filename.txt</div>
+                <div class="hover-card-type" id="hover-card-type">Plain Text Document</div>
+            </div>
+        </div>
+        <div class="hover-card-divider"></div>
+        <div class="hover-card-meta-grid">
+            <div class="hover-card-row">
+                <span class="hover-card-label">Size</span>
+                <span class="hover-card-val" id="hover-card-size">12.4 KB</span>
+            </div>
+            <div class="hover-card-row">
+                <span class="hover-card-label">Modified</span>
+                <span class="hover-card-val" id="hover-card-modified">Oct 18, 2026 2:15 PM</span>
+            </div>
+            <div class="hover-card-row" id="hover-card-git-row" style="display: none;">
+                <span class="hover-card-label">Git Status</span>
+                <span class="hover-card-val hover-git-val" id="hover-card-git">
+                    <span class="hover-git-dot" id="hover-card-git-dot">●</span>
+                    <span id="hover-card-git-text">Modified</span>
+                </span>
+            </div>
+            <div class="hover-card-row" id="hover-card-location-row">
+                <span class="hover-card-label">Location</span>
+                <span class="hover-card-val hover-card-location" id="hover-card-location">/Users/...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu">
+        <div class="context-item" id="ctx-new-tab" onclick="addNewTab()" style="display: none;">
+            <i>🗂️</i> <span>New Tab</span> <span class="shortcut" id="ctx-new-tab-shortcut">Ctrl+T</span>
+        </div>
+        <div class="context-item" id="ctx-open" onclick="openSelectedItemInEditor()">
+            <i>🚀</i> <span>Open in Editor</span> <span class="shortcut">Enter</span>
+        </div>
+        <div class="context-item" id="ctx-open-new-tab" onclick="openSelectedItemInNewTab()" style="display: none;">
+            <i>🗂️</i> <span>Open in New Tab</span>
+        </div>
+        <div class="context-item" id="ctx-diff" onclick="diffSelectedItemWithHead()" style="display: none;">
+            <i>⚖️</i> <span>Compare with HEAD (Diff)</span>
+        </div>
+        <div class="context-item" id="ctx-compare-two" onclick="diffSelectedPair()" style="display: none;">
+            <i>⚖️</i> <span>Compare Selected Files (Diff)</span>
+        </div>
+        <div class="context-item" id="ctx-quicklook" onclick="toggleQuickLook()">
+            <i>👁️</i> <span>Quick Look</span> <span class="shortcut">Space</span>
+        </div>
+        <div class="context-item" id="ctx-terminal-item" onclick="openTerminalAtSelection()">
+            <i>💻</i> <span>Open in Terminal</span>
+        </div>
+        <div class="context-item" id="ctx-reveal-item" onclick="revealSelectedItemInOS()">
+            <i>📂</i> <span id="ctx-reveal-label">Reveal in Finder</span>
+        </div>
+        <div class="context-divider" id="ctx-div-1"></div>
+        <div class="context-item" id="ctx-copy-path" onclick="copyPathToClipboard(false)">
+            <i>📋</i> <span>Copy Path</span>
+        </div>
+        <div class="context-item" id="ctx-copy-rel-path" onclick="copyPathToClipboard(true)">
+            <i>📎</i> <span>Copy Relative Path</span>
+        </div>
+        <div class="context-item" id="ctx-pin-folder" onclick="togglePinSelectedItem()">
+            <i id="ctx-pin-icon">⭐</i> <span id="ctx-pin-label">Pin to Favorites</span>
+        </div>
+        <div class="context-divider" id="ctx-div-2"></div>
+        <div class="context-item" id="ctx-rename" onclick="renameSelectedItem()">
+            <i>✏️</i> <span>Rename</span> <span class="shortcut">F2</span>
+        </div>
+        <div class="context-item" id="ctx-batch-rename" onclick="showBatchRenameModal()" style="display: none;">
+            <i>🏷️</i> <span>Smart Batch Rename...</span> <span class="shortcut" id="ctx-batch-shortcut">⌘⇧R</span>
+        </div>
+        <div class="context-item" id="ctx-compress" onclick="handleCompressSelected()" style="display: none;">
+            <i>🗜️</i> <span id="ctx-compress-label">Compress to .zip</span>
+        </div>
+        <div class="context-item" id="ctx-extract-here" onclick="handleExtractSelected(false)" style="display: none;">
+            <i>📦</i> <span>Extract Here</span>
+        </div>
+        <div class="context-item" id="ctx-extract-to" onclick="handleExtractSelected(true)" style="display: none;">
+            <i>📂</i> <span id="ctx-extract-to-label">Extract to Subfolder</span>
+        </div>
+        <div class="context-item" id="ctx-copy" onclick="copySelectedItem()">
+            <i>📋</i> <span>Copy</span> <span class="shortcut">Ctrl+C</span>
+        </div>
+        <div class="context-item" id="ctx-cut" onclick="cutSelectedItem()">
+            <i>✂️</i> <span>Cut</span> <span class="shortcut">Ctrl+X</span>
+        </div>
+        <div class="context-item" id="ctx-paste" onclick="pasteClipboardItem()">
+            <i>📥</i> <span>Paste</span> <span class="shortcut">Ctrl+V</span>
+        </div>
+        <div class="context-divider"></div>
+        <div class="context-item" id="ctx-new-folder" onclick="showNewFolderModal()">
+            <i>📁</i> <span>New Folder</span>
+        </div>
+        <div class="context-item" id="ctx-new-file" onclick="showNewFileModal()">
+            <i>📄</i> <span>New File</span>
+        </div>
+        <div class="context-divider"></div>
+        <div class="context-item" id="ctx-properties" onclick="showPropertiesModal()">
+            <i>ℹ️</i> <span>Properties</span> <span class="shortcut">Alt+Enter</span>
+        </div>
+        <div class="context-item danger" id="ctx-delete" onclick="deleteSelectedItem()">
+            <i>🗑️</i> <span id="ctx-delete-label">Move to Trash</span> <span class="shortcut" id="ctx-delete-shortcut">Del</span>
+        </div>
+    </div>
+
+    <!-- Tab Context Menu -->
+    <div id="tab-context-menu" class="context-menu" style="display: none;">
+        <div class="context-item" onclick="duplicateTargetTab()">
+            <i>📑</i> <span>Duplicate Tab</span>
+        </div>
+        <div class="context-item" onclick="openTerminalAtTargetTab()">
+            <i>💻</i> <span>Open in Terminal</span>
+        </div>
+        <div class="context-item" onclick="revealTargetTabInOS()">
+            <i>📂</i> <span id="ctx-tab-reveal-label">Reveal in Finder</span>
+        </div>
+        <div class="context-item" onclick="copyTargetTabPath()">
+            <i>📋</i> <span>Copy Folder Path</span>
+        </div>
+        <div class="context-divider"></div>
+        <div class="context-item" onclick="closeTargetTab()">
+            <i>✕</i> <span>Close Tab</span> <span class="shortcut">Ctrl+W</span>
+        </div>
+        <div class="context-item" onclick="closeOtherTabs()">
+            <i>🚫</i> <span>Close Other Tabs</span>
+        </div>
+        <div class="context-item" onclick="closeTabsToRight()">
+            <i>➡️</i> <span>Close Tabs to the Right</span>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- New Folder Modal -->
+    <div class="modal-overlay" id="modal-new-folder">
+        <div class="modal-box">
+            <div class="modal-title"><i>📁</i> Create New Folder</div>
+            <input type="text" id="input-new-folder" class="modal-input" placeholder="Folder name..." onkeypress="handleModalKey(event, createFolder)" />
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button class="modal-btn confirm" onclick="createFolder()">Create Folder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New File Modal -->
+    <div class="modal-overlay" id="modal-new-file">
+        <div class="modal-box">
+            <div class="modal-title"><i>📄</i> Create New File</div>
+            <input type="text" id="input-new-file" class="modal-input" placeholder="File name (e.g. index.ts)..." onkeypress="handleModalKey(event, createFile)" />
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button class="modal-btn confirm" onclick="createFile()">Create File</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Modal -->
+    <div class="modal-overlay" id="modal-rename">
+        <div class="modal-box">
+            <div class="modal-title"><i>✏️</i> Rename Item</div>
+            <input type="text" id="input-rename" class="modal-input" placeholder="New name..." onkeypress="handleModalKey(event, submitRename)" />
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button class="modal-btn confirm" onclick="submitRename()">Rename</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="modal-delete" onclick="hideModals()">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <div class="modal-title" style="color: var(--danger);"><i>🗑️</i> Move to Trash</div>
+            <div id="delete-prompt-text" style="font-size: 13px; color: var(--text-main); line-height: 1.5;"></div>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button type="button" class="modal-btn danger" id="btn-confirm-delete" onclick="submitDelete()">Move to Trash</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Properties Dialog (Windows Alt+Enter / macOS Get Info) -->
+    <div class="modal-overlay" id="modal-properties" onclick="hideModals()">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <div class="modal-title"><i id="prop-icon">📄</i> <span id="prop-title">Item Properties</span></div>
+            <div class="prop-grid">
+                <div class="prop-label">Full Path:</div>
+                <div class="prop-value" id="prop-path" style="font-family: monospace; font-size: 11px;"></div>
+                <div class="prop-label">Type:</div>
+                <div class="prop-value" id="prop-type"></div>
+                <div class="prop-label">Size:</div>
+                <div class="prop-value" id="prop-size"></div>
+                <div class="prop-label" id="prop-contains-label" style="display: none;">Contains:</div>
+                <div class="prop-value" id="prop-contains" style="display: none;"></div>
+                <div class="prop-label">Modified:</div>
+                <div class="prop-value" id="prop-modified"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel" onclick="copyPathToClipboard(selectedPropPath)">📋 Copy Full Path</button>
+                <button class="modal-btn confirm" onclick="hideModals()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- macOS Quick Look Modal (Spacebar) -->
+    <div class="modal-overlay" id="modal-quick-look" onclick="closeQuickLook()">
+        <div class="modal-box quick-look-box" onclick="event.stopPropagation()">
+            <div class="modal-title" style="justify-content: space-between;">
+                <span id="ql-title">Quick Look</span>
+                <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">Spacebar to close</span>
+            </div>
+            <div class="quick-look-body" id="ql-body"></div>
+            <div class="modal-actions">
+                <button class="modal-btn confirm" onclick="openSelectedItemInEditor()">🚀 Open in Editor</button>
+                <button class="modal-btn cancel" onclick="closeQuickLook()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings & Engine Status Modal -->
+    <div class="modal-overlay" id="modal-settings" onclick="hideModals()">
+        <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 490px; width: 92%; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 16px;">⚙️</span>
+                    <span>VenEl File Manager Settings & Status</span>
+                </div>
+                <button onclick="hideModals()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 4px;">✕</button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 14px; overflow-y: auto; padding-right: 4px;">
+                <!-- Engine Health Card -->
+                <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px;">
+                        <span style="color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Engine Status</span>
+                        <span style="display: flex; align-items: center; gap: 6px;">
+                            <span id="modal-engine-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; box-shadow: 0 0 6px #2ecc71; display: inline-block;"></span>
+                            <strong id="modal-engine-status" style="font-size: 12px;">Ready & Online</strong>
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-muted);">
+                        <span>Endpoint:</span>
+                        <span id="modal-engine-url" style="font-family: monospace; color: var(--text-main);">http://localhost:5050</span>
+                    </div>
+                    <button class="modal-btn cancel" onclick="pingEngineStatus()" style="width: 100%; justify-content: center; padding: 7px; font-size: 11px; margin-top: 4px;">
+                        🔄 Refresh Engine Health
+                    </button>
+                </div>
+
+                <!-- Multi-Tab Browsing Status & Quick Action -->
+                <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 12px;">
+                        <span style="color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Multi-Tab Browsing</span>
+                        <span style="display: flex; align-items: center; gap: 6px;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; box-shadow: 0 0 6px #2ecc71; display: inline-block;"></span>
+                            <strong style="font-size: 12px; color: #2ecc71;">Enabled by Default</strong>
+                        </span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+                        Multi-tab browsing is active by default. You can open tabs anytime using the <strong>+ New Tab</strong> button, the toolbar <strong>+ Tab</strong> button, middle-clicking any folder, or pressing <strong>Ctrl+T / ⌘T</strong>.
+                    </div>
+                    <button class="modal-btn confirm" onclick="addNewTab(); hideModals();" style="width: 100%; justify-content: center; padding: 7px; font-size: 11px;">
+                        ➕ Open New Tab Now
+                    </button>
+                </div>
+
+                <!-- IDE Controls -->
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button class="modal-btn confirm" onclick="openVsCodeExtensionSettings()" style="width: 100%; justify-content: center; padding: 10px; font-size: 12px; font-weight: 600;">
+                        ⚙️ Configure Extension Settings in VS Code
+                    </button>
+                    <button class="modal-btn cancel" onclick="toggleVsCodeSidebar()" style="width: 100%; justify-content: center; padding: 8px; font-size: 12px;">
+                        ◨ Show / Hide Primary Left Sidebar
+                    </button>
+                </div>
+
+                <!-- Quick Help Link Button -->
+                <button class="modal-btn" onclick="openHelpModal('shortcuts')" style="background: rgba(108, 92, 231, 0.15); border: 1px solid var(--accent); color: #fff; width: 100%; justify-content: center; padding: 9px; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 8px;">
+                    <span>❓ Open Feature Guide & Keyboard Shortcuts (Press ?)</span>
+                </button>
+
+                <!-- Features Overview -->
+                <div style="background: rgba(108, 92, 231, 0.08); border: 1px solid rgba(108, 92, 231, 0.2); border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #a29bfe; margin-bottom: 6px;">
+                        ✨ Active Capabilities
+                    </div>
+                    <ul style="font-size: 11px; color: var(--text-muted); padding-left: 18px; line-height: 1.6; margin: 0;">
+                        <li>🗂️ Multi-Tab Browsing (Ctrl+T / Ctrl+W / Middle-click)</li>
+                        <li>🌿 Git Status Badges & Compare with HEAD Live Diff</li>
+                        <li>⚡ Instant Live Filter (/) & Spotlight Machine Search</li>
+                        <li>⭐ Pinned Favorites & Bookmarks Quick-Access Bar</li>
+                        <li>⊞ 5 View Layouts (Details, List, Grid, Large, Compact)</li>
+                        <li>👁️ Spacebar Quick Look & Live Code/Image Previews</li>
+                        <li>💻 Integrated Terminal & Native Finder/Explorer Reveal</li>
+                    </ul>
+                </div>
+
+                <!-- Attribution & Links -->
+                <div style="border-top: 1px solid var(--border-color); padding-top: 10px; font-size: 11px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+                    <div>Developed with ❤️ by <strong style="color: var(--text-main);">Venkatesh Ellur</strong></div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <a href="https://www.linkedin.com/in/venkateshellur/" target="_blank" style="color: #0077b5; text-decoration: none; font-weight: 500;">LinkedIn</a>
+                        <span>•</span>
+                        <a href="https://github.com/venkateshellur/VenEl.FileManagerExtension" target="_blank" style="color: var(--accent); text-decoration: none;">GitHub</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 14px;">
+                <button class="modal-btn cancel" onclick="hideModals()" style="margin-left: auto;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help & Feature Guide Modal -->
+    <div class="modal-overlay" id="modal-help" onclick="hideModals()">
+        <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 680px; width: 94%; max-height: 88vh; display: flex; flex-direction: column;">
+            <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">❓</span>
+                    <div>
+                        <div style="font-size: 15px; font-weight: 700; color: #fff;">VenEl File Manager — Feature Guide & Shortcuts</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Power tools, keyboard shortcuts, mouse gestures & workflows</div>
+                    </div>
+                </div>
+                <button onclick="hideModals()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 4px;">✕</button>
+            </div>
+
+            <!-- Category Tabs Navigation -->
+            <div class="help-tabs-nav">
+                <button class="help-tab-btn active" id="help-btn-shortcuts" onclick="switchHelpTab('shortcuts')">⌨️ Shortcuts</button>
+                <button class="help-tab-btn" id="help-btn-tabs" onclick="switchHelpTab('tabs')">🗂️ Tabs</button>
+                <button class="help-tab-btn" id="help-btn-git" onclick="switchHelpTab('git')">🌿 Git & Diff</button>
+                <button class="help-tab-btn" id="help-btn-search" onclick="switchHelpTab('search')">⚡ Search & Filter</button>
+                <button class="help-tab-btn" id="help-btn-power" onclick="switchHelpTab('power')">🚀 Power Tools</button>
+            </div>
+
+            <!-- Tab Content Panes -->
+            <div class="help-content-container">
+                <!-- 1. Shortcuts Pane -->
+                <div class="help-pane active" id="help-pane-shortcuts">
+                    <table class="help-table">
+                        <tbody>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>T</kbd></td><td>Open a <strong>New Tab</strong> in current folder</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>W</kbd></td><td>Close active tab</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>Tab</kbd></td><td>Cycle forward / backward between open tabs</td></tr>
+                            <tr><td><kbd>Alt</kbd> + <kbd>1</kbd> .. <kbd>9</kbd></td><td>Jump directly to Tab 1 through 9</td></tr>
+                            <tr><td><kbd>Type A-Z</kbd></td><td><strong>Type-to-Select</strong>: Quick jump to matching file/folder (repeating cycles matches)</td></tr>
+                            <tr><td><kbd>↑</kbd> / <kbd>↓</kbd> / <kbd>Home</kbd> / <kbd>End</kbd></td><td>Navigate items (Hold <kbd>Shift</kbd> to extend range selection)</td></tr>
+                            <tr><td><kbd>Spacebar</kbd></td><td>Toggle <strong>Quick Look</strong> popup preview (Finder style)</td></tr>
+                            <tr><td><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd></td><td>Navigate History Back / Forward</td></tr>
+                            <tr><td><kbd>Alt</kbd> + <kbd>↑</kbd></td><td>Navigate up one level to Parent Folder</td></tr>
+                            <tr><td><kbd>Enter</kbd></td><td>Open selected folder, or open file in VS Code editor</td></tr>
+                            <tr><td><kbd>F2</kbd></td><td>Rename selected item</td></tr>
+                            <tr><td><kbd>Delete</kbd></td><td>Delete selected item</td></tr>
+                            <tr><td><kbd>Alt</kbd> + <kbd>Enter</kbd></td><td>View detailed File/Folder Properties dialog</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd></td><td>Copy selected file/folder</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>X</kbd></td><td>Cut selected file/folder</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>V</kbd></td><td>Paste file/folder from clipboard</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>A</kbd></td><td><strong>Select All</strong> files and folders in view</td></tr>
+                            <tr><td><kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd></td><td>Open <strong>Smart Batch Renamer</strong> for selected files</td></tr>
+                            <tr><td><kbd>⌘⇧.</kbd> (Mac) / <kbd>Ctrl</kbd> + <kbd>H</kbd></td><td>Toggle <strong>Show / Hide Hidden Files</strong> (dotfiles)</td></tr>
+                            <tr><td><kbd>Ctrl+F1</kbd> / <kbd>⌘⌥T</kbd></td><td>Toggle <strong>Compact Bars / Zen Mode</strong> (collapse top menus to folder title)</td></tr>
+                            <tr><td><kbd>⌘⇧P</kbd> / <kbd>Alt+P</kbd></td><td>Toggle <strong>File Preview Pane</strong> (auto-hides to right margin tab)</td></tr>
+                            <tr><td><kbd>⌘⇧B</kbd> / <kbd>Alt+B</kbd></td><td>Toggle <strong>Places Panel</strong> (auto-hides to left margin tab)</td></tr>
+                            <tr><td><kbd>Esc</kbd></td><td>Close active modal, context menu, or Quick Look</td></tr>
+                            <tr><td><kbd>?</kbd> or <kbd>F1</kbd></td><td>Open this Feature Guide & Shortcuts Sheet</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 2. Tabs Pane -->
+                <div class="help-pane" id="help-pane-tabs">
+                    <div class="help-card">
+                        <div class="help-card-title">🗂️ Browser-Style Multi-Tab Browsing</div>
+                        <div class="help-card-desc">Work with multiple project folders or drives side-by-side without opening extra editor windows. Each tab preserves its own independent path, history stack, and search query.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">🖱️ Middle-Click Power Shortcuts</div>
+                        <div class="help-card-desc">
+                            &bull; <strong>On Folders:</strong> Scroll-wheel click on any folder card or row to open it immediately in a <strong>New Tab</strong> without losing your place.<br>
+                            &bull; <strong>On Tabs:</strong> Scroll-wheel click directly on any tab in the top strip to close it.
+                        </div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">📑 Tab Context Menu</div>
+                        <div class="help-card-desc">Right-click any tab in the top strip for power actions: <strong>Duplicate Tab</strong>, <strong>Open in Terminal</strong>, <strong>Reveal in Finder/Explorer</strong>, <strong>Copy Folder Path</strong>, <strong>Close Other Tabs</strong>, or <strong>Close Tabs to Right</strong>.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">💾 Persistent Tab Sessions</div>
+                        <div class="help-card-desc">Your open tabs and active selection are saved to local session storage. Reopening the File Manager or restarting VS Code automatically restores your exact open tabs!</div>
+                    </div>
+                </div>
+
+                <!-- 3. Git & Diff Pane -->
+                <div class="help-pane" id="help-pane-git">
+                    <div class="help-card">
+                        <div class="help-card-title">🌿 Real-Time Git Status Badges</div>
+                        <div class="help-card-desc">
+                            Files in your Git repositories display visual indicators in real-time:<br>
+                            &bull; <span style="background: rgba(46, 204, 113, 0.2); color: #2ecc71; padding: 2px 6px; border-radius: 4px; font-weight: 600;">U</span> <strong>Untracked:</strong> Brand new file not yet added to Git.<br>
+                            &bull; <span style="background: rgba(241, 196, 15, 0.2); color: #f1c40f; padding: 2px 6px; border-radius: 4px; font-weight: 600;">M</span> <strong>Modified:</strong> Uncommitted working tree modifications.<br>
+                            &bull; <span style="background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 2px 6px; border-radius: 4px; font-weight: 600;">A</span> <strong>Added / Staged:</strong> Changes staged in the Git index.<br>
+                            &bull; <span style="background: rgba(235, 77, 75, 0.2); color: #eb4d4b; padding: 2px 6px; border-radius: 4px; font-weight: 600;">D</span> <strong>Deleted:</strong> File removed from the working tree.
+                        </div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">⚖️ Live Side-by-Side Diff with HEAD</div>
+                        <div class="help-card-desc">Right-click any modified or staged file and click <strong>Compare with HEAD (Diff)</strong> to open VS Code's native visual diff editor side-by-side.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title"> Branch & Commit Sync Status</div>
+                        <div class="help-card-desc">The bottom status bar shows your active branch name and sync status (e.g. <code>main ↑1 ↓0</code>). Click on it anytime to refresh Git status on demand.</div>
+                    </div>
+                </div>
+
+                <!-- 4. Search & Filter Pane -->
+                <div class="help-pane" id="help-pane-search">
+                    <div class="help-card">
+                        <div class="help-card-title">⚡ Instant Live Filter (<kbd>/</kbd>)</div>
+                        <div class="help-card-desc">Press <kbd>/</kbd> anywhere to focus the search bar. As you type, the file view filters in real-time with zero lag. Press <kbd>Esc</kbd> to clear the filter.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">🤖 Machine Agent Search (Spotlight & PowerShell)</div>
+                        <div class="help-card-desc">Click the scope button (<code>📁 Folder</code> &rarr; <code>⚡ Machine</code>) in the toolbar. This unleashes deep operating system indexing (macOS Spotlight / Windows PowerShell) to query your entire hard drive in milliseconds! Click any result's directory chip to jump straight there.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">🍞 Interactive Breadcrumbs & Direct Path Input</div>
+                        <div class="help-card-desc">Click any folder crumb in the address bar to jump up to that folder. Click on the address bar background to type or paste any absolute path, or click <code>▾</code> to quickly switch between Root drives and User Home.</div>
+                    </div>
+                </div>
+
+                <!-- 5. Power Tools Pane -->
+                <div class="help-pane" id="help-pane-power">
+                    <div class="help-card">
+                        <div class="help-card-title">⭐ Bookmarks & Pinned Favorites</div>
+                        <div class="help-card-desc">Click <strong>☆ Pin Folder</strong> in the Bookmarks bar or right-click any folder to pin it. Pinned folders appear as 1-click quick-access chips across all sessions.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">👁️ Spacebar Quick Look & Rich Interactive Previews</div>
+                        <div class="help-card-desc">
+                            Select any file and press <kbd>Spacebar</kbd> for an instant full-screen Quick Look preview, or glance at the right-hand preview pane. Supports:<br>
+                            &bull; <strong>📊 Spreadsheets (CSV, TSV):</strong> Fast native table parser with sticky headers, row numbers, and column counts.<br>
+                            &bull; <strong>📗 Excel Workbooks (.xlsx, .xls):</strong> Multi-sheet navigation with interactive sheet tabs and cell grid views.<br>
+                            &bull; <strong>📘 Word Documents (.docx):</strong> Formatted document reader view with styled headings and tables.<br>
+                            &bull; <strong>📕 PDF Documents (.pdf):</strong> Native inline PDF reader with page navigation.<br>
+                            &bull; <strong>🎵 Audio & Video (.mp3, .wav, .mp4, .webm):</strong> Built-in HTML5 media players.<br>
+                            &bull; <strong>📝 Markdown (.md):</strong> 1-click toggle between Rendered HTML view and Raw Source.<br>
+                            &bull; <strong>💻 Source Code:</strong> Syntax preview with line counts, file size, and 1-click clipboard copy.
+                        </div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">⊞ 5 View Layout Modes</div>
+                        <div class="help-card-desc">Use the Layout menu to toggle between <strong>Details</strong> (sortable multi-column table), <strong>List</strong> (clean compact rows), <strong>Grid</strong> (standard card tiles), <strong>Large Icons</strong> (high-res previews), and <strong>Compact</strong>.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">💻 Integrated Terminal & Native OS Reveal</div>
+                        <div class="help-card-desc">Click <strong>Terminal</strong> in the toolbar or context menu to spawn a VS Code terminal pre-navigated to that folder. Click <strong>Reveal in Finder / Explorer</strong> to open your operating system's native file window.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">🏷️ Smart Batch Renamer</div>
+                        <div class="help-card-desc">Select multiple files with <kbd>Ctrl/Cmd</kbd> + click or <kbd>Shift</kbd> + click (or press <kbd>Ctrl/Cmd</kbd> + <kbd>A</kbd> for Select All). Press <kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd> or click <strong>Batch Rename</strong>. Features 5 tabs: <strong>Find & Replace</strong> (with Regex), <strong>Add Prefix/Suffix</strong>, <strong>Sequential Numbering</strong> (e.g. 001, 002...), <strong>Case Transformation</strong> (lowercase, UPPERCASE, Title Case, camelCase, kebab-case, snake_case), and <strong>Extension Normalization</strong> with live real-time collision preview.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">🗜️ Zip Compression & One-Click Extraction</div>
+                        <div class="help-card-desc">Compress any selected file(s) or folder(s) directly into a <code>.zip</code> archive using the toolbar button or right-click menu. For archive files (<code>.zip</code>, <code>.tar.gz</code>, <code>.tgz</code>), right-click to <strong>Extract Here</strong> or <strong>Extract to Subfolder/</strong> instantly.</div>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-card-title">⚙️ Engine Diagnostics & Direct-to-Editor Mode</div>
+                        <div class="help-card-desc">Click <strong>⚙️</strong> in the header to view engine diagnostics, endpoint status, and quick VS Code configuration controls.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="modal-actions" style="margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 10px; display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 11px; color: var(--text-muted);">💡 Tip: Press <kbd style="font-size: 10px; padding: 1px 4px;">?</kbd> anywhere to toggle this guide</span>
+                <button class="modal-btn confirm" onclick="hideModals()" style="padding: 7px 18px; font-weight: 600;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🏷️ Smart Batch Renamer Modal -->
+    <div class="modal-overlay" id="modal-batch-rename" onclick="hideModals()">
+        <div class="modal-box batch-rename-box" onclick="event.stopPropagation()">
+            <div class="modal-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i>🏷️</i> <span>Smart Batch Renamer</span>
+                </div>
+                <span id="batch-item-count" class="batch-count-pill">0 items</span>
+            </div>
+
+            <!-- Tab switcher for rename modes -->
+            <div class="batch-tabs">
+                <button type="button" class="batch-tab-btn active" data-tab="replace" onclick="switchBatchTab('replace')">🔍 Find & Replace</button>
+                <button type="button" class="batch-tab-btn" data-tab="text" onclick="switchBatchTab('text')">➕ Add Prefix / Suffix</button>
+                <button type="button" class="batch-tab-btn" data-tab="number" onclick="switchBatchTab('number')">🔢 Numbering</button>
+                <button type="button" class="batch-tab-btn" data-tab="case" onclick="switchBatchTab('case')">🔠 Change Case</button>
+                <button type="button" class="batch-tab-btn" data-tab="ext" onclick="switchBatchTab('ext')">🏷️ Extension</button>
+            </div>
+
+            <!-- Tab 1: Find & Replace -->
+            <div id="batch-panel-replace" class="batch-controls-panel">
+                <div class="batch-form-row">
+                    <label for="batch-find-text">Find:</label>
+                    <input type="text" id="batch-find-text" class="modal-input" placeholder="Text to find..." oninput="updateBatchPreview()" />
+                </div>
+                <div class="batch-form-row">
+                    <label for="batch-replace-text">Replace With:</label>
+                    <input type="text" id="batch-replace-text" class="modal-input" placeholder="Replacement text..." oninput="updateBatchPreview()" />
+                </div>
+                <div class="batch-form-row inline" style="gap: 16px; margin-top: 4px;">
+                    <label><input type="checkbox" id="batch-find-case" onchange="updateBatchPreview()"> Match case</label>
+                    <label><input type="checkbox" id="batch-find-regex" onchange="updateBatchPreview()"> Regular Expression</label>
+                </div>
+            </div>
+
+            <!-- Tab 2: Add Prefix / Suffix -->
+            <div id="batch-panel-text" class="batch-controls-panel" style="display: none;">
+                <div class="batch-form-row-grid">
+                    <div class="batch-form-row">
+                        <label for="batch-prefix-text">Prefix (Prepend):</label>
+                        <input type="text" id="batch-prefix-text" class="modal-input" placeholder="e.g. IMG_ or 2026_" oninput="updateBatchPreview()" />
+                    </div>
+                    <div class="batch-form-row">
+                        <label for="batch-suffix-text">Suffix (Append before extension):</label>
+                        <input type="text" id="batch-suffix-text" class="modal-input" placeholder="e.g. _final or _v2" oninput="updateBatchPreview()" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Numbering -->
+            <div id="batch-panel-number" class="batch-controls-panel" style="display: none;">
+                <div class="batch-form-row-grid">
+                    <div class="batch-form-row">
+                        <label for="batch-num-start">Start At:</label>
+                        <input type="number" id="batch-num-start" class="modal-input" value="1" min="0" oninput="updateBatchPreview()" />
+                    </div>
+                    <div class="batch-form-row">
+                        <label for="batch-num-step">Increment Step:</label>
+                        <input type="number" id="batch-num-step" class="modal-input" value="1" min="1" oninput="updateBatchPreview()" />
+                    </div>
+                    <div class="batch-form-row">
+                        <label for="batch-num-padding">Padding Format:</label>
+                        <select id="batch-num-padding" class="modal-input" onchange="updateBatchPreview()">
+                            <option value="1">1, 2, 3...</option>
+                            <option value="2">01, 02, 03...</option>
+                            <option value="3" selected>001, 002, 003...</option>
+                            <option value="4">0001, 0002...</option>
+                        </select>
+                    </div>
+                    <div class="batch-form-row">
+                        <label for="batch-num-pos">Position:</label>
+                        <select id="batch-num-pos" class="modal-input" onchange="updateBatchPreview()">
+                            <option value="suffix">Append (name_001.ext)</option>
+                            <option value="prefix">Prepend (001_name.ext)</option>
+                            <option value="replace">Replace Name (001.ext)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="batch-form-row" style="margin-top: 4px;">
+                    <label for="batch-num-sep">Separator:</label>
+                    <input type="text" id="batch-num-sep" class="modal-input" value="_" placeholder="_" style="max-width: 120px;" oninput="updateBatchPreview()" />
+                </div>
+            </div>
+
+            <!-- Tab 4: Change Case -->
+            <div id="batch-panel-case" class="batch-controls-panel" style="display: none;">
+                <div class="batch-form-row">
+                    <label for="batch-case-mode">Target Case:</label>
+                    <select id="batch-case-mode" class="modal-input" onchange="updateBatchPreview()">
+                        <option value="lower">lowercase (hello_world.txt)</option>
+                        <option value="upper">UPPERCASE (HELLO_WORLD.TXT)</option>
+                        <option value="title">Title Case (Hello World.txt)</option>
+                        <option value="camel">camelCase (helloWorld.txt)</option>
+                        <option value="kebab">kebab-case (hello-world.txt)</option>
+                        <option value="snake">snake_case (hello_world.txt)</option>
+                    </select>
+                </div>
+                <div class="batch-form-row inline" style="margin-top: 4px;">
+                    <label><input type="checkbox" id="batch-case-ext" onchange="updateBatchPreview()"> Apply to file extension as well</label>
+                </div>
+            </div>
+
+            <!-- Tab 5: Extension Normalization -->
+            <div id="batch-panel-ext" class="batch-controls-panel" style="display: none;">
+                <div class="batch-form-row">
+                    <label for="batch-ext-input">New Extension (or leave blank to remove):</label>
+                    <input type="text" id="batch-ext-input" class="modal-input" placeholder="e.g. .bak, .jpeg, or leave blank to strip" oninput="updateBatchPreview()" />
+                </div>
+                <div class="batch-form-row inline" style="gap: 16px; margin-top: 4px;">
+                    <button type="button" class="tool-btn" onclick="document.getElementById('batch-ext-input').value = '.bak'; updateBatchPreview();">Add .bak</button>
+                    <button type="button" class="tool-btn" onclick="batchExtLowercase();">Force ext lowercase (.JPG &rarr; .jpg)</button>
+                </div>
+            </div>
+
+            <!-- Real-time Conflict Alert Box -->
+            <div id="batch-conflict-alert" style="display: none; background: rgba(235, 77, 75, 0.15); border: 1px solid rgba(235, 77, 75, 0.4); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #ff7675; margin-bottom: 8px;">
+                ⚠️ <strong>Name Conflicts Detected:</strong> Two or more files would share the same name. Please adjust rules before applying.
+            </div>
+
+            <!-- Live Preview Table -->
+            <div class="batch-preview-container">
+                <div class="batch-preview-header">
+                    <span>Live Preview</span>
+                    <span id="batch-preview-status" class="batch-status-text">0 changes pending</span>
+                </div>
+                <div class="batch-preview-table-wrap">
+                    <table class="batch-preview-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 44%;">Original Name</th>
+                                <th style="width: 44%;">New Name</th>
+                                <th style="width: 12%; text-align: center;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batch-preview-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 12px;">
+                <button type="button" class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button type="button" class="modal-btn confirm" id="btn-apply-batch-rename" onclick="submitBatchRename()">Apply Rename</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🗜️ Compress Modal -->
+    <div class="modal-overlay" id="modal-compress" onclick="hideModals()">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <div class="modal-title"><i>🗜️</i> Compress to .zip Archive</div>
+            <div id="compress-prompt-desc" style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4;">
+                Enter a name for the new archive:
+            </div>
+            <input type="text" id="input-compress-name" class="modal-input" placeholder="archive.zip" onkeydown="handleModalKey(event, submitCompress)" />
+            <div class="modal-actions">
+                <button type="button" class="modal-btn cancel" onclick="hideModals()">Cancel</button>
+                <button type="button" class="modal-btn confirm" id="btn-confirm-compress" onclick="submitCompress()">Compress</button>
+            </div>
+        </div>
+    <!-- ⚖️ Visual File Diff & Comparison Modal -->
+    <div class="diff-modal" id="modal-diff" onclick="closeVisualDiff(event)">
+        <div class="diff-card" onclick="event.stopPropagation()">
+            <div class="diff-header">
+                <div class="diff-header-left">
+                    <span class="diff-title"><i>⚖️</i> Visual File Diff</span>
+                    <span class="diff-file-tag" id="diff-tag-a">File A</span>
+                    <span style="color: var(--text-muted); font-size: 11px;">↔</span>
+                    <span class="diff-file-tag" id="diff-tag-b">File B</span>
+                    <div class="diff-stats" id="diff-stats-box" style="display: none;">
+                        <span class="diff-badge-add" id="diff-stat-add">+0</span>
+                        <span class="diff-badge-del" id="diff-stat-del">-0</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="modal-btn" style="font-size: 11px; padding: 4px 10px;" id="diff-btn-vscode" onclick="openDiffInVsCode()">🚀 Open in VS Code Diff</button>
+                    <button onclick="closeVisualDiff()" style="background: none; border: none; color: #888; cursor: pointer; font-size: 18px; padding: 4px 8px; border-radius: 4px;">✕</button>
+                </div>
+            </div>
+            <div class="diff-toolbar">
+                <div class="diff-mode-toggle">
+                    <button class="diff-mode-btn active" id="diff-btn-split" onclick="setDiffMode('split')">Split View</button>
+                    <button class="diff-mode-btn" id="diff-btn-unified" onclick="setDiffMode('unified')">Unified View</button>
+                </div>
+                <div id="diff-info-msg" style="font-size: 11px; color: var(--text-muted);"></div>
+            </div>
+            <div class="diff-body-container" id="diff-body-container">
+                <!-- Content dynamically populated by renderDiffView() -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 📂 Full-Panel Drag & Drop File Upload Overlay -->
+    <div id="dropOverlay">
+        <div class="drop-overlay-box">
+            <div style="font-size: 42px; margin-bottom: 12px;">📂</div>
+            <div style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px;">Drop Files to Add to Folder</div>
+            <div style="font-size: 12px; color: #a29bfe;" id="dropOverlayTargetName">Active Directory</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">Supports text files, scripts, images, documents & binaries</div>
+        </div>
+    </div>
+
+    <!-- ⌨️ Type-to-Select / Incremental Quick Search Floating HUD -->
+    <div id="type-ahead-badge" class="type-ahead-badge">
+        <span class="type-ahead-icon">🔎</span>
+        <span class="type-ahead-text" id="type-ahead-query"></span>
+        <span class="type-ahead-count" id="type-ahead-count"></span>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

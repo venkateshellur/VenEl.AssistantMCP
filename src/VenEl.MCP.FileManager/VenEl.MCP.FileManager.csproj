@@ -26,4 +26,9 @@
     <ProjectReference Include="..\VenEl.MCP.Decompiler\VenEl.MCP.Decompiler.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Web\Static\**\*" />
+  </ItemGroup>
+
+
 </Project>
