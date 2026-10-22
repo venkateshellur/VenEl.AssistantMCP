@@ -29,6 +29,7 @@ public record CompressRequest(string? CurrentPath, string? Folder, List<string>?
 public record ExtractRequest(string? ArchivePath, string? DestinationDir, string? Folder, string? ArchiveName, string? DestinationFolder);
 public record ExportProjectRequest(string Path, string? DestinationDir);
 public record DisconnectSftpRequest(string ConnectionId);
+public record OpenPathRequest(string? Path);
 
 public static class FileManagerWebApp
 {
@@ -191,6 +192,133 @@ public static class FileManagerWebApp
             TryAddSpecial(Environment.SpecialFolder.MyDocuments, "Documents", "Documents");
 
             return Results.Ok(roots);
+        });
+
+        // 4b. IDE Environment & Workspace Information
+        _app.MapGet("/api/env/info", () =>
+        {
+            var ideName = Environment.GetEnvironmentVariable("VENEL_IDE_NAME") ?? "IDE";
+            return Results.Ok(new 
+            { 
+                ideName = ideName, 
+                workspaceFolders = Array.Empty<object>(), 
+                primaryWorkspace = (string?)null 
+            });
+        });
+
+        // 4c. Open File with OS System Default App (Excel, Word, Preview, VLC, etc.)
+        _app.MapMethods("/api/files/openWithSystem", new[] { "GET", "POST" }, async (HttpContext ctx) =>
+        {
+            string? p = ctx.Request.Query["path"];
+            if (string.IsNullOrWhiteSpace(p) && ctx.Request.HasJsonContentType())
+            {
+                try
+                {
+                    var req = await ctx.Request.ReadFromJsonAsync<OpenPathRequest>();
+                    p = req?.Path;
+                }
+                catch {}
+            }
+
+            if (string.IsNullOrWhiteSpace(p) || (!File.Exists(p) && !Directory.Exists(p)))
+                return Results.BadRequest(new { error = "Valid path required" });
+
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = p,
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Could not launch with system: {ex.Message}");
+            }
+        });
+
+        // 4c2. Run Script in Terminal / Standalone Process
+        _app.MapMethods("/api/files/runScript", new[] { "GET", "POST" }, async (HttpContext ctx) =>
+        {
+            string? p = ctx.Request.Query["path"];
+            if (string.IsNullOrWhiteSpace(p) && ctx.Request.HasJsonContentType())
+            {
+                try
+                {
+                    var req = await ctx.Request.ReadFromJsonAsync<OpenPathRequest>();
+                    p = req?.Path;
+                }
+                catch {}
+            }
+
+            if (string.IsNullOrWhiteSpace(p) || !File.Exists(p))
+                return Results.BadRequest(new { error = "Valid file path required" });
+
+            try
+            {
+                var dir = Path.GetDirectoryName(p) ?? Directory.GetCurrentDirectory();
+                var ext = Path.GetExtension(p).ToLowerInvariant();
+                ProcessStartInfo psi;
+
+                if (OperatingSystem.IsWindows())
+                {
+                    if (ext == ".ps1")
+                    {
+                        psi = new ProcessStartInfo
+                        {
+                            FileName = "powershell.exe",
+                            Arguments = $"-NoExit -ExecutionPolicy Bypass -File \"{p}\"",
+                            WorkingDirectory = dir,
+                            UseShellExecute = true
+                        };
+                    }
+                    else
+                    {
+                        psi = new ProcessStartInfo
+                        {
+                            FileName = "cmd.exe",
+                            Arguments = $"/k \"{p}\"",
+                            WorkingDirectory = dir,
+                            UseShellExecute = true
+                        };
+                    }
+                }
+                else if (OperatingSystem.IsMacOS())
+                {
+                    psi = new ProcessStartInfo
+                    {
+                        FileName = "open",
+                        Arguments = $"-a Terminal \"{p}\"",
+                        WorkingDirectory = dir,
+                        UseShellExecute = false
+                    };
+                }
+                else
+                {
+                    psi = new ProcessStartInfo
+                    {
+                        FileName = "xdg-open",
+                        Arguments = $"\"{p}\"",
+                        WorkingDirectory = dir,
+                        UseShellExecute = false
+                    };
+                }
+
+                Process.Start(psi);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Could not run script: {ex.Message}");
+            }
+        });
+
+        // 4d. Open File in Editor stub
+        _app.MapGet("/api/files/openInEditor", (string? path) =>
+        {
+            return Results.Ok(new { success = true });
         });
 
         // 5. New Folder
@@ -1135,11 +1263,11 @@ public static class FileManagerWebApp
         });
 
         // 12. UI Dashboard & Static Assets
-        _app.MapGet("/", () => ServeStaticFile("index.html", "text/html; charset=utf-8"));
-        _app.MapGet("/index.html", () => ServeStaticFile("index.html", "text/html; charset=utf-8"));
-        _app.MapGet("/styles.css", () => ServeStaticFile("styles.css", "text/css; charset=utf-8"));
-        _app.MapGet("/app.js", () => ServeStaticFile("app.js", "application/javascript; charset=utf-8"));
-        _app.MapGet("/media/{fileName}", (string fileName) => ServeStaticFile(fileName));
+        _app.MapGet("/", (HttpContext ctx) => ServeStaticFile("index.html", "text/html; charset=utf-8", ctx));
+        _app.MapGet("/index.html", (HttpContext ctx) => ServeStaticFile("index.html", "text/html; charset=utf-8", ctx));
+        _app.MapGet("/styles.css", (HttpContext ctx) => ServeStaticFile("styles.css", "text/css; charset=utf-8", ctx));
+        _app.MapGet("/app.js", (HttpContext ctx) => ServeStaticFile("app.js", "application/javascript; charset=utf-8", ctx));
+        _app.MapGet("/media/{fileName}", (string fileName, HttpContext ctx) => ServeStaticFile(fileName, null, ctx));
 
         await _app.StartAsync(ct);
     }
@@ -1571,8 +1699,14 @@ public static class FileManagerWebApp
         }
     }
 
-    private static IResult ServeStaticFile(string fileName, string? customContentType = null)
+    private static IResult ServeStaticFile(string fileName, string? customContentType = null, HttpContext? ctx = null)
     {
+        if (ctx != null)
+        {
+            ctx.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+            ctx.Response.Headers.Pragma = "no-cache";
+            ctx.Response.Headers.Expires = "0";
+        }
         var safeFileName = Path.GetFileName(fileName);
         var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
         var contentType = customContentType ?? ext switch
