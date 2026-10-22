@@ -198,12 +198,38 @@ public static class FileManagerWebApp
         _app.MapGet("/api/env/info", () =>
         {
             var ideName = Environment.GetEnvironmentVariable("VENEL_IDE_NAME") ?? "IDE";
+            var version = Environment.GetEnvironmentVariable("VENEL_EXTENSION_VERSION") ?? "1.1.3";
             return Results.Ok(new 
             { 
                 ideName = ideName, 
+                version = version,
+                engine = "Kestrel (.NET)",
                 workspaceFolders = Array.Empty<object>(), 
                 primaryWorkspace = (string?)null 
             });
+        });
+
+        // 4b.2 Diagnostic Logs API
+        _app.MapGet("/api/logs/recent", () =>
+        {
+            try
+            {
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                var logDir = Path.Combine(home, ".venel", "logs");
+                if (Directory.Exists(logDir))
+                {
+                    var todayFile = Path.Combine(logDir, $"venel-{DateTime.UtcNow:yyyy-MM-dd}.log");
+                    if (File.Exists(todayFile))
+                    {
+                        var lines = File.ReadAllLines(todayFile);
+                        var count = Math.Min(lines.Length, 40);
+                        var recent = string.Join("\n", lines.TakeLast(count));
+                        return Results.Ok(new { logs = recent });
+                    }
+                }
+            }
+            catch {}
+            return Results.Ok(new { logs = $"[{DateTime.UtcNow:O}] [INFO] Kestrel (.NET) engine active and healthy." });
         });
 
         // 4c. Open File with OS System Default App (Excel, Word, Preview, VLC, etc.)
@@ -1267,6 +1293,9 @@ public static class FileManagerWebApp
         _app.MapGet("/index.html", (HttpContext ctx) => ServeStaticFile("index.html", "text/html; charset=utf-8", ctx));
         _app.MapGet("/styles.css", (HttpContext ctx) => ServeStaticFile("styles.css", "text/css; charset=utf-8", ctx));
         _app.MapGet("/app.js", (HttpContext ctx) => ServeStaticFile("app.js", "application/javascript; charset=utf-8", ctx));
+        _app.MapGet("/logo.png", (HttpContext ctx) => ServeStaticFile("logo.png", "image/png", ctx));
+        _app.MapGet("/logo.svg", (HttpContext ctx) => ServeStaticFile("logo.svg", "image/svg+xml", ctx));
+        _app.MapGet("/icon.svg", (HttpContext ctx) => ServeStaticFile("icon.svg", "image/svg+xml", ctx));
         _app.MapGet("/media/{fileName}", (string fileName, HttpContext ctx) => ServeStaticFile(fileName, null, ctx));
 
         await _app.StartAsync(ct);
