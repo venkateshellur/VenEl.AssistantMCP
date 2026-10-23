@@ -198,14 +198,36 @@ public static class FileManagerWebApp
         _app.MapGet("/api/env/info", () =>
         {
             var ideName = Environment.GetEnvironmentVariable("VENEL_IDE_NAME") ?? "IDE";
-            var version = Environment.GetEnvironmentVariable("VENEL_EXTENSION_VERSION") ?? "1.1.3";
+            var version = Environment.GetEnvironmentVariable("VENEL_EXTENSION_VERSION") ?? "1.1.4";
             return Results.Ok(new 
             { 
                 ideName = ideName, 
                 version = version,
                 engine = "Kestrel (.NET)",
+                engineTier = 1,
+                capabilities = new {
+                    localFs = true,
+                    multiTab = true,
+                    dualPane = true,
+                    quickLook = true,
+                    batchRename = true,
+                    sftp = true
+                },
+                diagnosticMessage = "High-performance .NET Kestrel engine active and fully operational.",
                 workspaceFolders = Array.Empty<object>(), 
                 primaryWorkspace = (string?)null 
+            });
+        });
+
+        // 4b.1 Re-check / Engine Status API
+        _app.MapGet("/api/engine/retry", () =>
+        {
+            return Results.Ok(new
+            {
+                success = true,
+                engine = "Kestrel (.NET)",
+                url = "http://127.0.0.1:5050",
+                message = ".NET Kestrel engine is already active and online!"
             });
         });
 
