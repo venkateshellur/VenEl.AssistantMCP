@@ -14,6 +14,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using VenEl.MCP.FileManager.Configuration;
 using VenEl.MCP.FileManager.Sftp;
+using VenEl.MCP.FileManager.Cloud;
 
 namespace VenEl.MCP.FileManager.Web;
 
@@ -35,6 +36,7 @@ public static class FileManagerWebApp
 {
     private static WebApplication? _app;
     private static readonly ISftpSessionManager _sftp = new SftpSessionManager();
+    private static readonly ICloudStorageManager _cloud = new CloudStorageManager();
 
     public static async Task StartAsync(FileManagerOptions options, CancellationToken ct = default)
     {
@@ -179,6 +181,25 @@ public static class FileManagerWebApp
                 try
                 {
                     var p = Environment.GetFolderPath(folder);
+                    if (string.IsNullOrWhiteSpace(p) || !Directory.Exists(p))
+                    {
+                        var oneDriveCommercial = Environment.GetEnvironmentVariable("OneDriveCommercial");
+                        var oneDrive = Environment.GetEnvironmentVariable("OneDrive");
+                        var odCandidates = new[] { oneDriveCommercial, oneDrive };
+                        foreach (var od in odCandidates)
+                        {
+                            if (!string.IsNullOrWhiteSpace(od) && Directory.Exists(od))
+                            {
+                                var sub = Path.Combine(od, name);
+                                if (Directory.Exists(sub))
+                                {
+                                    p = sub;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
                     if (!string.IsNullOrWhiteSpace(p) && Directory.Exists(p))
                     {
                         roots.Add(new { name = name, path = p, type = type });
@@ -190,6 +211,20 @@ public static class FileManagerWebApp
             TryAddSpecial(Environment.SpecialFolder.UserProfile, "Home (~)", "Home");
             TryAddSpecial(Environment.SpecialFolder.Desktop, "Desktop", "Desktop");
             TryAddSpecial(Environment.SpecialFolder.MyDocuments, "Documents", "Documents");
+
+            try
+            {
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                if (!string.IsNullOrWhiteSpace(home))
+                {
+                    var dl = Path.Combine(home, "Downloads");
+                    if (Directory.Exists(dl))
+                    {
+                        roots.Add(new { name = "Downloads", path = dl, type = "Downloads" });
+                    }
+                }
+            }
+            catch { }
 
             return Results.Ok(roots);
         });
@@ -1301,6 +1336,146 @@ public static class FileManagerWebApp
                     var file = httpRequest.Form.Files[0];
                     using var stream = file.OpenReadStream();
                     await _sftp.UploadFileAsync(connectionId, remotePath, stream, cancellationToken);
+                }
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // 11b. Cloud Storage (AWS S3, MinIO, Azure Blob) Endpoints
+        _app.MapPost("/api/cloud/test", async (CloudConnectRequest req, CancellationToken ct) =>
+        {
+            var result = await _cloud.TestConnectionAsync(req, ct);
+            return Results.Ok(result);
+        });
+
+        _app.MapPost("/api/cloud/connect", async (CloudConnectRequest req, CancellationToken ct) =>
+        {
+            var result = await _cloud.ConnectAsync(req, ct);
+            if (!result.Success)
+            {
+                return Results.BadRequest(new { error = result.ErrorMessage ?? "Failed to connect to cloud storage." });
+            }
+            return Results.Ok(result);
+        });
+
+        _app.MapPost("/api/cloud/disconnect", async (CloudDisconnectRequest req) =>
+        {
+            var disconnected = await _cloud.DisconnectAsync(req.ConnectionId);
+            return Results.Ok(new { success = disconnected });
+        });
+
+        _app.MapGet("/api/cloud/sessions", () =>
+        {
+            return Results.Ok(_cloud.GetActiveSessions());
+        });
+
+        _app.MapGet("/api/cloud/list", async (string connectionId, string? path, CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await _cloud.ListDirectoryAsync(connectionId, path, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        _app.MapGet("/api/cloud/read", async (string connectionId, string path, CancellationToken ct) =>
+        {
+            try
+            {
+                var content = await _cloud.ReadFileTextAsync(connectionId, path, ct);
+                return Results.Ok(new { content });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        _app.MapGet("/api/cloud/readBytes", async (string connectionId, string path, CancellationToken ct) =>
+        {
+            try
+            {
+                var bytes = await _cloud.ReadFileBytesAsync(connectionId, path, ct);
+                var ext = Path.GetExtension(path).ToLowerInvariant();
+                var contentType = ext switch
+                {
+                    ".png" => "image/png",
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".gif" => "image/gif",
+                    ".svg" => "image/svg+xml",
+                    ".webp" => "image/webp",
+                    ".pdf" => "application/pdf",
+                    _ => "application/octet-stream"
+                };
+                return Results.File(bytes, contentType);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        _app.MapPost("/api/cloud/save", async (CloudSaveFileRequest req, CancellationToken ct) =>
+        {
+            try
+            {
+                await _cloud.SaveFileTextAsync(req.ConnectionId, req.Key, req.Content, ct);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        _app.MapPost("/api/cloud/createFolder", async (CloudCreateFolderRequest req, CancellationToken ct) =>
+        {
+            try
+            {
+                await _cloud.CreateFolderAsync(req.ConnectionId, req.CurrentPrefix, req.FolderName, ct);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        _app.MapPost("/api/cloud/delete", async (CloudDeleteRequest req, CancellationToken ct) =>
+        {
+            try
+            {
+                await _cloud.DeleteAsync(req.ConnectionId, req.Key, req.IsDirectory, ct);
+                return Results.Ok(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        _app.MapPost("/api/cloud/upload", async (HttpRequest httpRequest, string connectionId, string key, CancellationToken ct) =>
+        {
+            try
+            {
+                if (!httpRequest.HasFormContentType || httpRequest.Form.Files.Count == 0)
+                {
+                    using var stream = httpRequest.Body;
+                    await _cloud.UploadFileAsync(connectionId, key, stream, ct);
+                }
+                else
+                {
+                    var file = httpRequest.Form.Files[0];
+                    using var stream = file.OpenReadStream();
+                    await _cloud.UploadFileAsync(connectionId, key, stream, ct);
                 }
                 return Results.Ok(new { success = true });
             }

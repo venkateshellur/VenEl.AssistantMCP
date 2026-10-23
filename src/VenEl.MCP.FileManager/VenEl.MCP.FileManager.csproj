@@ -24,6 +24,8 @@
   <ItemGroup>
     <ProjectReference Include="..\VenEl.MCP.Core\VenEl.MCP.Core.csproj" />
     <ProjectReference Include="..\VenEl.MCP.Decompiler\VenEl.MCP.Decompiler.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.AWS\VenEl.MCP.AWS.csproj" />
+    <ProjectReference Include="..\VenEl.MCP.Azure\VenEl.MCP.Azure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
