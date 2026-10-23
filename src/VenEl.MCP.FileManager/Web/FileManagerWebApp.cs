@@ -233,7 +233,7 @@ public static class FileManagerWebApp
         _app.MapGet("/api/env/info", () =>
         {
             var ideName = Environment.GetEnvironmentVariable("VENEL_IDE_NAME") ?? "IDE";
-            var version = Environment.GetEnvironmentVariable("VENEL_EXTENSION_VERSION") ?? "1.1.4";
+            var version = Environment.GetEnvironmentVariable("VENEL_EXTENSION_VERSION") ?? "1.3.0";
             return Results.Ok(new 
             { 
                 ideName = ideName, 
