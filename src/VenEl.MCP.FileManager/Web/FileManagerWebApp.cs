@@ -1524,7 +1524,9 @@ public static class FileManagerWebApp
         _app.MapGet("/logo.png", (HttpContext ctx) => ServeStaticFile("logo.png", "image/png", ctx));
         _app.MapGet("/logo.svg", (HttpContext ctx) => ServeStaticFile("logo.svg", "image/svg+xml", ctx));
         _app.MapGet("/icon.svg", (HttpContext ctx) => ServeStaticFile("icon.svg", "image/svg+xml", ctx));
-        _app.MapGet("/media/{fileName}", (string fileName, HttpContext ctx) => ServeStaticFile(fileName, null, ctx));
+        _app.MapGet("/js/{**subpath}", (string subpath, HttpContext ctx) => ServeStaticFile("js/" + subpath, "application/javascript; charset=utf-8", ctx));
+        _app.MapGet("/css/{**subpath}", (string subpath, HttpContext ctx) => ServeStaticFile("css/" + subpath, "text/css; charset=utf-8", ctx));
+        _app.MapGet("/media/{**fileName}", (string fileName, HttpContext ctx) => ServeStaticFile(fileName, null, ctx));
 
         await _app.StartAsync(ct);
     }
@@ -1956,7 +1958,7 @@ public static class FileManagerWebApp
         }
     }
 
-    private static IResult ServeStaticFile(string fileName, string? customContentType = null, HttpContext? ctx = null)
+    private static IResult ServeStaticFile(string relativePath, string? customContentType = null, HttpContext? ctx = null)
     {
         if (ctx != null)
         {
@@ -1964,18 +1966,28 @@ public static class FileManagerWebApp
             ctx.Response.Headers.Pragma = "no-cache";
             ctx.Response.Headers.Expires = "0";
         }
-        var safeFileName = Path.GetFileName(fileName);
-        var ext = Path.GetExtension(safeFileName).ToLowerInvariant();
+
+        var cleanRel = relativePath.Replace('\\', '/').TrimStart('/');
+        if (cleanRel.Contains(".."))
+        {
+            return Results.BadRequest("Invalid path");
+        }
+
+        var ext = Path.GetExtension(cleanRel).ToLowerInvariant();
         var contentType = customContentType ?? ext switch
         {
             ".html" => "text/html; charset=utf-8",
             ".css" => "text/css; charset=utf-8",
             ".js" => "application/javascript; charset=utf-8",
+            ".mjs" => "application/javascript; charset=utf-8",
             ".png" => "image/png",
             ".svg" => "image/svg+xml",
             ".ico" => "image/x-icon",
+            ".json" => "application/json",
             _ => "application/octet-stream"
         };
+
+        var osSubPath = cleanRel.Replace('/', Path.DirectorySeparatorChar);
 
         // 1. Check physical disk locations (extension media/ folder, current dir, etc.)
         var candidateDirs = new[]
@@ -1991,17 +2003,21 @@ public static class FileManagerWebApp
 
         foreach (var dir in candidateDirs)
         {
-            var filePath = Path.Combine(dir, safeFileName);
-            if (File.Exists(filePath))
+            if (!Directory.Exists(dir)) continue;
+            var fullDir = Path.GetFullPath(dir);
+            var filePath = Path.GetFullPath(Path.Combine(fullDir, osSubPath));
+            if (filePath.StartsWith(fullDir, StringComparison.OrdinalIgnoreCase) && File.Exists(filePath))
             {
-                return Results.File(Path.GetFullPath(filePath), contentType);
+                return Results.File(filePath, contentType);
             }
         }
 
         // 2. Check embedded resource fallback in assembly
+        var dotNotation = cleanRel.Replace('/', '.');
         var asm = typeof(FileManagerWebApp).Assembly;
         var resName = asm.GetManifestResourceNames()
-            .FirstOrDefault(n => n.EndsWith(safeFileName, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(n => n.EndsWith("." + dotNotation, StringComparison.OrdinalIgnoreCase)
+                              || n.EndsWith(dotNotation, StringComparison.OrdinalIgnoreCase));
         if (resName != null)
         {
             var stream = asm.GetManifestResourceStream(resName);
@@ -2011,6 +2027,6 @@ public static class FileManagerWebApp
             }
         }
 
-        return Results.NotFound($"{safeFileName} not found");
+        return Results.NotFound($"{cleanRel} not found");
     }
 }
