@@ -89,8 +89,13 @@ public class SftpSessionManager : ISftpSessionManager
                 var connInfo = CreateConnectionInfo(request);
                 var client = new SftpClient(connInfo)
                 {
-                    KeepAliveInterval = TimeSpan.FromSeconds(30),
-                    OperationTimeout = TimeSpan.FromSeconds(20)
+                    KeepAliveInterval = TimeSpan.FromSeconds(15),
+                    OperationTimeout = TimeSpan.FromMinutes(2)
+                };
+
+                client.ErrorOccurred += (sender, e) =>
+                {
+                    // Suppress unhandled SSH.NET background task exceptions from terminating host process
                 };
 
                 client.Connect();
@@ -432,7 +437,7 @@ public class SftpSessionManager : ISftpSessionManager
 
         return new ConnectionInfo(req.Host, port, req.Username, authMethods.ToArray())
         {
-            Timeout = TimeSpan.FromSeconds(15)
+            Timeout = TimeSpan.FromSeconds(30)
         };
     }
 

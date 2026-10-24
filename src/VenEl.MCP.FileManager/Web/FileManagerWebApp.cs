@@ -156,22 +156,53 @@ public static class FileManagerWebApp
             var roots = new List<object>();
             try 
             {
-                foreach (var drive in DriveInfo.GetDrives())
+                if (OperatingSystem.IsWindows())
                 {
-                    try
+                    foreach (var drive in DriveInfo.GetDrives())
                     {
-                        var path = drive.RootDirectory.FullName;
-                        if (path.StartsWith("/System/Volumes") || path.StartsWith("/dev") || path.StartsWith("/private"))
-                            continue;
-
-                        var label = string.IsNullOrWhiteSpace(drive.VolumeLabel) ? drive.Name : $"{drive.Name} ({drive.VolumeLabel})";
-                        roots.Add(new { 
-                            name = label, 
-                            path = path, 
-                            type = "Drive"
-                        });
+                        try
+                        {
+                            var path = drive.RootDirectory.FullName;
+                            var label = string.IsNullOrWhiteSpace(drive.VolumeLabel) ? drive.Name : $"{drive.Name} ({drive.VolumeLabel})";
+                            roots.Add(new { 
+                                name = label, 
+                                path = path, 
+                                type = "Drive"
+                            });
+                        }
+                        catch { }
                     }
-                    catch { }
+                }
+                else
+                {
+                    // On macOS and Linux, DriveInfo.GetDrives() triggers Interop.Sys.GetAllMountPoints()
+                    // which can crash the entire runtime with AccessViolationException (SIGABRT)
+                    // on certain dynamic/APFS mounts. Safely provide root and /Volumes.
+                    roots.Add(new {
+                        name = OperatingSystem.IsMacOS() ? "Macintosh HD (/)" : "Root (/)",
+                        path = "/",
+                        type = "Drive"
+                    });
+
+                    if (Directory.Exists("/Volumes"))
+                    {
+                        try
+                        {
+                            foreach (var vol in Directory.GetDirectories("/Volumes"))
+                            {
+                                var name = Path.GetFileName(vol);
+                                if (!string.Equals(name, "Macintosh HD", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    roots.Add(new {
+                                        name = name,
+                                        path = vol,
+                                        type = "Drive"
+                                    });
+                                }
+                            }
+                        }
+                        catch { }
+                    }
                 }
             }
             catch { }
